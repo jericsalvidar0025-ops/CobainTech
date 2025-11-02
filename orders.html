@@ -5,6 +5,27 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>My Orders — CobainTech</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Quick styling for order cards */
+    .order-card {
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: #111;
+      color: #eee;
+    }
+    .order-card strong { color: #fff; }
+    .order-status {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .status-Pending { background: orange; }
+    .status-Processing { background: #3498db; }
+    .status-Shipped { background: purple; }
+    .status-Delivered { background: green; }
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -26,7 +47,7 @@
   <main class="container">
     <h1>My Orders</h1>
     <div id="orders-table">
-      <!-- Orders will be rendered here -->
+      <!-- Orders will appear here -->
     </div>
   </main>
 
@@ -43,7 +64,9 @@
   <script src="script.js"></script>
 
   <script>
-    // Render orders in real-time for logged-in customer
+    function setFooterYear(){ document.getElementById('year').textContent = new Date().getFullYear(); }
+
+    // Show orders for logged-in customer
     function initCustomerOrders(){
       const container = document.getElementById('orders-table');
       if(!container) return;
@@ -56,29 +79,33 @@
         }
 
         db.collection('orders')
-          .where('userId','==',user.uid)
+          .where('userId','==', user.uid)
           .orderBy('createdAt','desc')
           .onSnapshot(snapshot=>{
-            const orders = [];
-            snapshot.forEach(doc=>{
-              orders.push({id: doc.id, ...doc.data()});
-            });
+            const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             if(!orders.length){
               container.innerHTML = '<p>You have no orders yet.</p>';
               return;
             }
 
-            container.innerHTML = orders.map(o=>`
-              <div class="order-card">
-                <div><strong>Order ID:</strong> ${o.id}</div>
-                <div><strong>Date:</strong> ${o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : ''}</div>
-                <div><strong>Total:</strong> ₱${o.total.toLocaleString()}</div>
-                <div><strong>Status:</strong> <span class="order-status">${o.status}</span></div>
-                <div><strong>Items:</strong><br/>${o.items.map(i=>`${i.title} ×${i.qty}`).join('<br/>')}</div>
-                <hr/>
-              </div>
-            `).join('');
+            container.innerHTML = orders.map(o=>{
+              const date = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : '—';
+              const itemsHTML = (o.items || []).map(i=>`${i.title} ×${i.qty}`).join('<br/>');
+              const statusClass = `status-${o.status || 'Pending'}`;
+              return `
+                <div class="order-card">
+                  <div><strong>Order ID:</strong> ${o.id}</div>
+                  <div><strong>Date:</strong> ${date}</div>
+                  <div><strong>Total:</strong> ₱${(o.total || 0).toLocaleString()}</div>
+                  <div><strong>Status:</strong> <span class="order-status ${statusClass}">${o.status || 'Pending'}</span></div>
+                  <div><strong>Items:</strong><br/>${itemsHTML}</div>
+                </div>
+              `;
+            }).join('');
+          }, err => {
+            console.error('Failed to fetch orders:', err);
+            container.innerHTML = '<p>Failed to load orders. Please refresh.</p>';
           });
       });
     }
