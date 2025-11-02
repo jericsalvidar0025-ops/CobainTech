@@ -1,58 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Admin Dashboard — CobainTech</title>
-  <link rel="stylesheet" href="style.css">
-  <style>
-    /* ---------------- Global ---------------- */
-    body { margin:0; font-family:'Segoe UI',Roboto,sans-serif; background:#0b0c0e; color:#eee; }
-    a { color:inherit; text-decoration:none; }
-    h1,h2,h3,h4,h5,h6 { margin:0; }
-    button { cursor:pointer; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Dashboard — CobainTech</title>
+<link rel="stylesheet" href="style.css">
+<style>
+/* ---------------- Global ---------------- */
+body { margin:0; font-family:'Segoe UI',Roboto,sans-serif; background:#0b0c0e; color:#eee; }
+a { color:inherit; text-decoration:none; }
+h1,h2,h3,h4,h5,h6 { margin:0; }
+button { cursor:pointer; }
 
-    /* ---------------- Header ---------------- */
-    header { background:#111; padding:12px 24px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.5);}
-    .brand { font-weight:bold; font-size:1.5rem; color:#fff; }
-    .header-actions button { background:#3498db; border:none; color:#fff; padding:8px 16px; border-radius:6px; transition:0.2s; }
-    .header-actions button:hover { background:#2980b9; }
+/* ---------------- Header ---------------- */
+header { background:#111; padding:12px 24px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.5);}
+.brand { font-weight:bold; font-size:1.5rem; color:#fff; }
+.header-actions button { background:#3498db; border:none; color:#fff; padding:8px 16px; border-radius:6px; transition:0.2s; }
+.header-actions button:hover { background:#2980b9; }
 
-    /* ---------------- Layout ---------------- */
-    .container { display:flex; height:calc(100vh - 60px); }
-    nav.sidebar { width:220px; background:#111; padding:16px; display:flex; flex-direction:column; box-shadow:2px 0 6px rgba(0,0,0,0.5); }
-    nav.sidebar button { background:none; border:none; color:#eee; text-align:left; padding:12px; margin-bottom:8px; border-radius:6px; font-size:1rem; transition:0.2s; }
-    nav.sidebar button.active, nav.sidebar button:hover { background:#3498db; color:#fff; }
-    main.content { flex:1; padding:24px; overflow-y:auto; }
+/* ---------------- Layout ---------------- */
+.container { display:flex; height:calc(100vh - 60px); }
+nav.sidebar { width:220px; background:#111; padding:16px; display:flex; flex-direction:column; box-shadow:2px 0 6px rgba(0,0,0,0.5); }
+nav.sidebar button { background:none; border:none; color:#eee; text-align:left; padding:12px; margin-bottom:8px; border-radius:6px; font-size:1rem; transition:0.2s; }
+nav.sidebar button.active, nav.sidebar button:hover { background:#3498db; color:#fff; }
+main.content { flex:1; padding:24px; overflow-y:auto; }
 
-    /* ---------------- Cards & Tables ---------------- */
-    .card { background:#111; padding:16px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.5); margin-bottom:24px; }
-    table { width:100%; border-collapse:collapse; margin-top:12px; }
-    th, td { padding:12px; text-align:left; }
-    th { background:#222; font-weight:600; }
-    tr:nth-child(even) { background:#1a1a1a; }
-    tr:hover { background:#2c3e50; }
-    button.small { padding:6px 12px; border-radius:6px; font-size:.85rem; }
+/* ---------------- Cards & Tables ---------------- */
+.card { background:#111; padding:16px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.5); margin-bottom:24px; }
+table { width:100%; border-collapse:collapse; margin-top:12px; }
+th, td { padding:12px; text-align:left; }
+th { background:#222; font-weight:600; }
+tr:nth-child(even) { background:#1a1a1a; }
+tr:hover { background:#2c3e50; }
+button.small { padding:6px 12px; border-radius:6px; font-size:.85rem; }
 
-    /* ---------------- Inputs ---------------- */
-    input, select { background:#1a1a1a; color:#eee; border:1px solid #444; border-radius:6px; padding:6px 10px; width:100%; margin-bottom:12px; }
-    label { display:block; margin-bottom:6px; font-weight:600; }
+/* ---------------- Inputs ---------------- */
+input, select { background:#1a1a1a; color:#eee; border:1px solid #444; border-radius:6px; padding:6px 10px; width:100%; margin-bottom:12px; }
+label { display:block; margin-bottom:6px; font-weight:600; }
 
-    /* ---------------- Modals ---------------- */
-    .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:1000; }
-    .modal-inner { background:#111; padding:24px; border-radius:12px; max-width:600px; width:90%; box-shadow:0 6px 20px rgba(0,0,0,0.5); }
-    .modal-inner button.close { float:right; background:#e74c3c; color:#fff; border:none; padding:6px 12px; border-radius:6px; }
+/* ---------------- Modals ---------------- */
+.modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:1000; }
+.modal-inner { background:#111; padding:24px; border-radius:12px; max-width:600px; width:90%; box-shadow:0 6px 20px rgba(0,0,0,0.5); }
+.modal-inner button.close { float:right; background:#e74c3c; color:#fff; border:none; padding:6px 12px; border-radius:6px; }
 
-    /* ---------------- Product Form ---------------- */
-    #product-form-area { display:none; margin-bottom:24px; }
+/* ---------------- Product Form ---------------- */
+#product-form-area { display:none; margin-bottom:24px; }
 
-    /* ---------------- Sales ---------------- */
-    .sales-metrics { display:flex; gap:16px; margin-bottom:24px; }
-    .metric { flex:1; background:#111; padding:16px; border-radius:12px; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.5); }
-    .metric h3 { font-size:1.2rem; margin-bottom:8px; }
-    .metric p { font-size:1.5rem; font-weight:bold; color:#3498db; }
+/* ---------------- Products Grid ---------------- */
+.product-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; margin-top:16px; }
+.product-card { background:#1a1a1a; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.5); display:flex; flex-direction:column; }
+.product-card img { width:100%; height:150px; object-fit:cover; }
+.product-card .product-info { padding:12px; flex:1; display:flex; flex-direction:column; }
+.product-card h4 { margin-bottom:8px; font-size:1rem; }
+.product-card p { font-size:.9rem; margin-bottom:4px; }
+.product-card .actions { margin-top:auto; display:flex; gap:6px; }
 
-  </style>
+/* ---------------- Sales ---------------- */
+.sales-metrics { display:flex; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
+.metric { flex:1; min-width:150px; background:#111; padding:16px; border-radius:12px; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.5); }
+.metric h3 { font-size:1.2rem; margin-bottom:8px; }
+.metric p { font-size:1.5rem; font-weight:bold; color:#3498db; }
+</style>
 </head>
 <body>
 
@@ -93,10 +101,8 @@
           </form>
         </div>
       </div>
-      <div class="card">
-        <input id="admin-search" placeholder="Search products..." oninput="renderAdminProducts()">
-        <div id="admin-product-list"></div>
-      </div>
+      <input id="admin-search" placeholder="Search products..." oninput="renderAdminProducts()">
+      <div id="admin-product-list" class="product-grid"></div>
     </section>
 
     <!-- Orders Tab -->
@@ -133,11 +139,15 @@
             <p id="total-orders">0</p>
           </div>
         </div>
+        <canvas id="salesChart" height="250"></canvas>
       </div>
     </section>
 
   </main>
 </div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -147,33 +157,79 @@
 <script src="script.js"></script>
 
 <script>
-  // Tab switching
-  function showTab(tab){
-    ['products','orders','sales'].forEach(t=>{
-      document.getElementById('tab-'+t).style.display = (t===tab)?'block':'none';
-      document.querySelectorAll('.sidebar button').forEach(btn=>{
-        if(btn.textContent.toLowerCase()===t) btn.classList.toggle('active', t===tab);
-      });
-    });
-  }
-
-  // Load admin dashboard
-  window.addEventListener('load',()=>{
-    bindAuthState();
-    initAdmin();
-    initAdminOrders();
-
-    // Calculate sales metrics
-    ordersRef().onSnapshot(snapshot=>{
-      let totalRevenue=0;
-      snapshot.forEach(doc=>{
-        const data=doc.data();
-        totalRevenue+=data.total||0;
-      });
-      document.getElementById('total-revenue').textContent='₱'+totalRevenue.toLocaleString();
-      document.getElementById('total-orders').textContent=snapshot.size;
+function showTab(tab){
+  ['products','orders','sales'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display=(t===tab)?'block':'none';
+    document.querySelectorAll('.sidebar button').forEach(btn=>{
+      if(btn.textContent.toLowerCase()===t) btn.classList.toggle('active', t===tab);
     });
   });
+}
+
+// Products rendering with images
+function renderAdminProducts(){
+  const container=document.getElementById('admin-product-list');
+  db.collection('products').get().then(snapshot=>{
+    const products=[];
+    snapshot.forEach(doc=>{
+      const p=doc.data();
+      p.id=doc.id;
+      if(!document.getElementById('admin-search').value || p.title.toLowerCase().includes(document.getElementById('admin-search').value.toLowerCase())){
+        products.push(p);
+      }
+    });
+    container.innerHTML=products.map(p=>`
+      <div class="product-card">
+        <img src="${p.imageUrl||'https://via.placeholder.com/150'}">
+        <div class="product-info">
+          <h4>${p.title}</h4>
+          <p>₱${p.price.toLocaleString()}</p>
+          <p>Stock: ${p.stock}</p>
+          <p>Category: ${p.category}</p>
+          <div class="actions">
+            <button class="btn small primary" onclick="editProduct('${p.id}')">Edit</button>
+            <button class="btn small ghost" onclick="deleteProduct('${p.id}')">Delete</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  });
+}
+
+// Sales chart
+let salesChart;
+function renderSalesChart(){
+  const ctx=document.getElementById('salesChart').getContext('2d');
+  db.collection('orders').orderBy('createdAt').get().then(snapshot=>{
+    const labels=[], data=[];
+    snapshot.forEach(doc=>{
+      const o=doc.data();
+      const date=o.createdAt?.toDate().toLocaleDateString()||'';
+      labels.push(date);
+      data.push(o.total||0);
+    });
+    if(salesChart) salesChart.destroy();
+    salesChart=new Chart(ctx,{type:'line',data:{labels, datasets:[{label:'Order Total', data, borderColor:'#3498db', backgroundColor:'rgba(52,152,219,0.2)'}]},options:{responsive:true,plugins:{legend:{display:false}}}});
+  });
+}
+
+// Load admin dashboard
+window.addEventListener('load',()=>{
+  bindAuthState();
+  initAdmin();
+  initAdminOrders();
+  renderAdminProducts();
+  renderSalesChart();
+
+  // Sales metrics
+  ordersRef().onSnapshot(snapshot=>{
+    let totalRevenue=0;
+    snapshot.forEach(doc=>{ totalRevenue+=doc.data().total||0; });
+    document.getElementById('total-revenue').textContent='₱'+totalRevenue.toLocaleString();
+    document.getElementById('total-orders').textContent=snapshot.size;
+  });
+});
 </script>
+
 </body>
 </html>
