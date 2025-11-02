@@ -1,130 +1,177 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin Panel — CobainTech</title>
-  <link rel="stylesheet" href="style.css" />
-  <style>
-    body { background:#0b0c0e; color:#eee; font-family: 'Segoe UI', sans-serif; margin:0; padding:0; }
-    header, footer { background:#111; padding:12px 20px; }
-    header .brand-link { color:#fff; text-decoration:none; font-size:1.2rem; font-weight:bold; }
-    header nav a, header nav button { margin-left:12px; }
-    main { padding:20px; max-width:1200px; margin:auto; }
-    h1 { margin-bottom:20px; }
-    .section { margin-bottom:40px; }
-    
-    /* Admin product table */
-    #admin-product-list {
-      display:grid;
-      grid-template-columns: repeat(auto-fill,minmax(250px,1fr));
-      gap:16px;
-    }
-    .admin-item {
-      background:#1a1b1f;
-      padding:16px;
-      border-radius:12px;
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
-      gap:8px;
-      box-shadow:0 4px 12px rgba(0,0,0,0.4);
-    }
-    .admin-item div { font-size:0.95rem; }
-    .admin-item button { font-size:0.85rem; padding:6px 10px; border-radius:6px; cursor:pointer; }
-    .admin-item button:hover { opacity:0.9; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CobainTech Admin Dashboard</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    background: #121212;
+    color: #eee;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
 
-    /* Product form */
-    #product-form-area {
-      background:#1a1b1f;
-      padding:20px;
-      border-radius:12px;
-      margin-bottom:30px;
-      display:none;
-      box-shadow:0 6px 20px rgba(0,0,0,0.5);
-    }
-    #product-form label { display:block; margin-bottom:12px; }
-    #product-form input, #product-form textarea, #product-form select {
-      width:100%; padding:8px; border-radius:6px; border:1px solid #333; background:#111; color:#eee;
-      margin-top:4px;
-    }
-    #product-form button { margin-top:12px; }
+  /* Sidebar */
+  .sidebar {
+    width: 240px;
+    background: #1F1F1F;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    border-right: 1px solid #333;
+  }
+  .sidebar h2 { color: #4FC3F7; text-align: center; margin-bottom: 24px; }
+  .sidebar nav a {
+    display: block;
+    padding: 12px 16px;
+    color: #eee;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: 0.2s;
+  }
+  .sidebar nav a:hover, .sidebar nav a.active { background: #4FC3F7; color: #121212; }
 
-    /* Admin orders table */
-    table { width:100%; border-collapse:collapse; margin-top:16px; }
-    th, td { padding:12px 8px; text-align:left; }
-    th { background:#1a1b1f; color:#fff; font-weight:600; }
-    tr:nth-child(even) { background:#111; }
-    tr:hover { background:#222; }
-    td button { padding:6px 10px; font-size:0.85rem; border-radius:6px; }
+  /* Main content */
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  header.site-header {
+    background: #1F1F1F;
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #333;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header.site-header h1 { margin: 0; font-size: 1.5rem; }
+  .header-actions button {
+    background: #333;
+    color: #eee;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+  }
+  .header-actions button:hover { background: #4FC3F7; color: #121212; }
 
-    .status-Pending { color:orange; font-weight:bold; }
-    .status-Processing { color:#3498db; font-weight:bold; }
-    .status-Shipped { color:purple; font-weight:bold; }
-    .status-Delivered { color:green; font-weight:bold; }
+  .container { padding: 16px; }
 
-    /* Buttons */
-    .btn { padding:6px 12px; border:none; border-radius:6px; cursor:pointer; font-weight:500; }
-    .btn.primary { background:#3498db; color:#fff; }
-    .btn.ghost { background:transparent; color:#fff; border:1px solid #555; }
-    .btn.small { font-size:0.85rem; padding:4px 8px; }
+  /* Stats Cards */
+  .stats-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 24px 0; }
+  .stat-card {
+    background: #1F1F1F;
+    padding: 16px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  }
+  .stat-card h3 { font-size: 1.2rem; color: #bbb; margin-bottom: 8px; }
+  .stat-card p { font-size: 1.6rem; font-weight: bold; }
 
-    /* Responsive tweaks */
-    @media(max-width:768px){
-      #admin-product-list { grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); }
-    }
-  </style>
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+  }
+  table th, table td { padding: 12px; text-align: left; }
+  table thead { background: #1F1F1F; }
+  table tbody tr { border-bottom: 1px solid #333; transition: 0.2s; }
+  table tbody tr:hover { background: #222; }
+  .status-badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: bold;
+    color: #fff;
+    display: inline-block;
+    font-size: 0.85rem;
+  }
+  .status-Pending { background: orange; }
+  .status-Processing { background: #3498db; }
+  .status-Shipped { background: purple; }
+  .status-Delivered { background: green; }
+  button.update-btn, button.export-btn {
+    background: #4FC3F7;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: bold;
+    color: #121212;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  button.update-btn:hover, button.export-btn:hover { background: #36b0e0; }
+
+  @media (max-width: 768px) {
+    body { flex-direction: column; }
+    .sidebar { width: 100%; flex-direction: row; overflow-x: auto; }
+    .sidebar nav a { margin: 0 8px; }
+  }
+</style>
 </head>
 <body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <h2>CT Admin</h2>
+  <nav>
+    <a href="#" class="active" data-section="dashboard">Dashboard</a>
+    <a href="#" data-section="orders">Orders</a>
+    <a href="#" data-section="products">Products</a>
+    <a href="#" data-section="users">Users</a>
+    <a href="#" data-section="settings">Settings</a>
+  </nav>
+</div>
+
+<!-- Main Content -->
+<div class="main-content">
   <header class="site-header">
-    <div class="container header-inner">
-      <div class="brand">
-        <a href="index.html" class="brand-link">CobainTech Admin</a>
-      </div>
-      <nav class="actions">
-        <span id="welcome-user-top" class="welcome-user"></span>
-        <button class="btn" onclick="auth.signOut()">Logout</button>
-      </nav>
+    <h1>Dashboard</h1>
+    <div class="header-actions">
+      <button onclick="logoutUser()">Logout</button>
     </div>
   </header>
 
-  <main>
-    <h1>Admin Dashboard</h1>
+  <div class="container" id="section-content">
 
-    <!-- Product management -->
-    <section class="section">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h2>Products</h2>
-        <button class="btn primary" onclick="showAddProduct()">Add Product</button>
+    <!-- Dashboard Section -->
+    <div id="dashboard-section">
+      <div class="stats-cards">
+        <div class="stat-card"><h3>Total Orders</h3><p id="stat-orders">0</p></div>
+        <div class="stat-card"><h3>Total Revenue</h3><p id="stat-revenue">₱0</p></div>
+        <div class="stat-card"><h3>Total Products</h3><p id="stat-products">0</p></div>
+        <div class="stat-card"><h3>Pending Orders</h3><p id="stat-pending">0</p></div>
       </div>
+    </div>
 
-      <!-- Search -->
-      <input id="admin-search" type="text" placeholder="Search products..." style="width:100%; padding:8px; margin-bottom:16px; border-radius:6px; border:1px solid #333; background:#111; color:#eee;" />
-
-      <!-- Product form -->
-      <div id="product-form-area">
-        <h3 id="product-form-title">Add Product</h3>
-        <form id="product-form" onsubmit="return saveProduct(event)">
-          <input type="hidden" id="p-id" />
-          <label>Title<input id="p-title" required /></label>
-          <label>Price<input type="number" id="p-price" required /></label>
-          <label>Stock<input type="number" id="p-stock" required /></label>
-          <label>Category<input id="p-category" required /></label>
-          <label>Description<textarea id="p-desc"></textarea></label>
-          <label>Image URL<input id="p-image-url" /></label>
-          <button type="submit" class="btn primary">Save</button>
-          <button type="button" class="btn ghost" onclick="hideProductForm()">Cancel</button>
-        </form>
+    <!-- Orders Section -->
+    <div id="orders-section" style="display:none;">
+      <div style="margin-bottom:16px;">
+        <input id="search-input" placeholder="Search by customer or order ID" style="padding:8px 12px;border-radius:6px;border:none;background:#1F1F1F;color:#eee;margin-right:8px;">
+        <select id="status-filter" style="padding:8px 12px;border-radius:6px;border:none;background:#1F1F1F;color:#eee;">
+          <option value="">All Status</option>
+          <option value="Pending">Pending</option>
+          <option value="Processing">Processing</option>
+          <option value="Shipped">Shipped</option>
+          <option value="Delivered">Delivered</option>
+        </select>
+        <button class="export-btn" onclick="exportOrdersCSV()">Export CSV</button>
       </div>
-
-      <div id="admin-product-list">
-        <!-- Products injected here -->
-      </div>
-    </section>
-
-    <!-- Orders management -->
-    <section class="section">
-      <h2>Orders</h2>
       <table>
         <thead>
           <tr>
@@ -136,47 +183,135 @@
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="admin-orders">
-          <!-- Orders injected here -->
-        </tbody>
+        <tbody id="admin-orders"></tbody>
       </table>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <div class="container footer-inner">
-      <div>© <span id="year"></span> CobainTech</div>
     </div>
-  </footer>
 
-  <!-- Firebase SDKs (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+    <!-- Products Section -->
+    <div id="products-section" style="display:none;">
+      <h2>Products Management</h2>
+      <p>Coming soon: add, update, delete products here.</p>
+    </div>
 
-  <script src="firebase-config.js"></script>
-  <script src="script.js"></script>
+    <!-- Users Section -->
+    <div id="users-section" style="display:none;">
+      <h2>Users Management</h2>
+      <p>Coming soon: view and manage users.</p>
+    </div>
 
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
+    <!-- Settings Section -->
+    <div id="settings-section" style="display:none;">
+      <h2>Settings</h2>
+      <p>Coming soon: configure admin settings.</p>
+    </div>
 
-    // Admin product search
-    const searchInput = document.getElementById('admin-search');
-    if(searchInput) searchInput.addEventListener('input', () => renderAdminProducts());
+  </div>
+</div>
 
-    // Bind welcome user
-    auth.onAuthStateChanged(user => {
-      if(user){
-        const welcome = document.getElementById('welcome-user-top');
-        usersRef().doc(user.uid).get().then(doc=>{
-          if(doc.exists) welcome.textContent = `Hi, ${doc.data().username}`;
-        });
-      }
+<footer class="site-footer container" style="padding:16px;text-align:center;background:#1F1F1F;border-top:1px solid #333;">
+  © <span id="year"></span> CobainTech
+</footer>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script src="firebase-config.js"></script>
+<script src="script.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const sections = document.querySelectorAll('.sidebar nav a');
+sections.forEach(a=>{
+  a.addEventListener('click', e=>{
+    e.preventDefault();
+    sections.forEach(s=>s.classList.remove('active'));
+    a.classList.add('active');
+    const sec = a.dataset.section;
+    document.querySelectorAll('#section-content > div').forEach(d=>{
+      d.style.display = d.id===sec+'-section'?'block':'none';
     });
+  });
+});
 
-    // Initialize admin
-    window.addEventListener('load', () => initAdmin());
-  </script>
+// Orders
+let allOrders = [];
+let filteredOrders = [];
+
+async function renderDashboard() {
+  const ordersSnap = await db.collection('orders').get();
+  const productsSnap = await db.collection('products').get();
+  allOrders = ordersSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+  filteredOrders = [...allOrders];
+
+  // Stats
+  document.getElementById('stat-orders').textContent = allOrders.length;
+  document.getElementById('stat-revenue').textContent = '₱'+allOrders.reduce((sum,o)=>sum+(o.total||0),0).toLocaleString();
+  document.getElementById('stat-products').textContent = productsSnap.docs.length;
+  document.getElementById('stat-pending').textContent = allOrders.filter(o=>o.status==='Pending').length;
+
+  renderOrdersTable(filteredOrders);
+}
+
+// Render orders table
+function renderOrdersTable(orders){
+  const tbody = document.getElementById('admin-orders');
+  tbody.innerHTML = orders.map(o=>{
+    const itemsHTML = (o.items||[]).map(i=>i.title+'×'+i.qty).join('<br>');
+    return `<tr>
+      <td>${o.id}</td>
+      <td>${o.userId}</td>
+      <td>${itemsHTML}</td>
+      <td>₱${(o.total||0).toLocaleString()}</td>
+      <td><span class="status-badge status-${o.status}">${o.status}</span></td>
+      <td><button class="update-btn" onclick="updateOrderStatus('${o.id}')">Update</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// Update order status
+function updateOrderStatus(orderId){
+  const newStatus = prompt('Enter new status (Pending, Processing, Shipped, Delivered):');
+  if(!newStatus) return;
+  db.collection('orders').doc(orderId).update({ status: newStatus }).then(()=>renderDashboard()).catch(console.error);
+}
+
+// Filters
+document.getElementById('status-filter').addEventListener('change', e=>{
+  const status = e.target.value;
+  filteredOrders = allOrders.filter(o=>!status || o.status===status);
+  renderOrdersTable(filteredOrders);
+});
+document.getElementById('search-input').addEventListener('input', e=>{
+  const term = e.target.value.toLowerCase();
+  filteredOrders = allOrders.filter(o=>!term || o.userId.toLowerCase().includes(term) || o.id.toLowerCase().includes(term));
+  renderOrdersTable(filteredOrders);
+});
+
+// Export CSV
+function exportOrdersCSV(){
+  if(!allOrders.length) return alert('No orders to export.');
+  const csvRows = [];
+  const headers = ['Order ID','Customer','Items','Total','Status'];
+  csvRows.push(headers.join(','));
+  allOrders.forEach(o=>{
+    const items = (o.items||[]).map(i=>i.title+'×'+i.qty).join('|');
+    csvRows.push([o.id,o.userId,items,o.total,o.status].join(','));
+  });
+  const blob = new Blob([csvRows.join('\n')],{type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download='orders.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Live updates
+db.collection('orders').onSnapshot(()=>renderDashboard());
+
+// Auth check
+auth.onAuthStateChanged(user=>{ if(!user) window.location.href='login.html'; else renderDashboard(); });
+
+</script>
 </body>
 </html>
