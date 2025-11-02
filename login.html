@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login — CobainTech</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="auth-body">
+  <main class="auth-page">
+    <div class="auth-card">
+      <h2>Sign in to CobainTech</h2>
+      <p class="muted">Use your email. Admins will be redirected to the Admin Dashboard.</p>
+
+      <form onsubmit="return loginUser(event)" class="auth-form">
+        <label>Email
+          <input id="login-username" type="email" required />
+        </label>
+
+        <label>Password
+          <input id="login-password" type="password" required />
+        </label>
+
+        <div class="auth-actions">
+          <button class="btn primary" type="submit">Login</button>
+          <a href="signup.html" class="btn ghost">Create account</a>
+        </div>
+      </form>
+
+      <p class="muted small">Tip: create an account, then mark it as admin in Firestore for dashboard access.</p>
+      <p class="muted small"><a href="index.html">Back to store</a></p>
+    </div>
+  </main>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

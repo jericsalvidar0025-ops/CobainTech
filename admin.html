@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — CobainTech</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand"><a href="index.html" class="brand-link"><span class="logo-mark">CT</span><span class="brand-name">CobainTech</span></a></div>
+      <nav class="actions">
+        <a href="index.html" class="btn ghost">Open Store</a>
+        <button class="btn" onclick="logoutUser()">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container admin-grid">
+    <aside class="admin-col">
+      <div class="card">
+        <h3>Products</h3>
+        <div class="admin-actions">
+          <button class="btn primary" onclick="showAddProduct()">+ Add Product</button>
+          <input id="admin-search" placeholder="Search products..." oninput="renderAdminProducts()" />
+        </div>
+        <div id="admin-product-list" class="admin-list"></div>
+      </div>
+
+      <div class="card">
+        <h3>Orders</h3>
+        <div id="admin-orders"></div>
+      </div>
+    </aside>
+
+    <section class="admin-main">
+      <div id="product-form-area" class="card" style="display:none">
+        <h3 id="product-form-title">Add Product</h3>
+        <form id="product-form" onsubmit="return saveProduct(event)">
+          <input id="p-id" type="hidden" />
+          <label>Title <input id="p-title" required /></label>
+          <label>Price (₱) <input id="p-price" type="number" required min="0" step="1" /></label>
+          <label>Stock <input id="p-stock" type="number" required min="0" /></label>
+          <label>Category <input id="p-category" required /></label>
+          <label>Description <textarea id="p-desc" rows="4"></textarea></label>
+          <label>Image <input id="p-image" type="file" accept="image/*" onchange="previewProductImage(event)" /></label>
+          <div id="p-img-preview" style="margin:8px 0;"></div>
+          <div class="form-actions">
+            <button class="btn primary" type="submit">Save</button>
+            <button type="button" class="btn ghost" onclick="hideProductForm()">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="admin-welcome" class="card">
+        <h2>Admin Dashboard</h2>
+        <p>Manage products and orders. Use Firestore to persist data across devices.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer container">
+    <div>Admin • CobainTech Demo</div>
+  </footer>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

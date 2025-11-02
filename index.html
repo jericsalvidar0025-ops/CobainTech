@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CobainTech — Premium Tech</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <a href="index.html" class="brand-link">
+          <span class="logo-mark">CT</span>
+          <span class="brand-name">CobainTech</span>
+        </a>
+      </div>
+
+      <div class="search-wrap">
+        <input id="search-input" type="search" placeholder="Search products — headphones, watch, speaker..." />
+        <select id="category-filter" aria-label="Category filter">
+          <option value="">All categories</option>
+        </select>
+        <select id="sort-select" aria-label="Sort select">
+          <option value="popular">Sort: Popular</option>
+          <option value="price-asc">Price ↑</option>
+          <option value="price-desc">Price ↓</option>
+          <option value="newest">Newest</option>
+        </select>
+      </div>
+
+      <nav class="actions">
+        <span id="welcome-user-top" class="welcome-user"></span>
+        <a id="login-link" href="login.html" class="btn small ghost">Login</a>
+        <a id="signup-link" href="signup.html" class="btn small">Sign Up</a>
+        <a id="admin-link" href="admin.html" class="btn small ghost" style="display:none">Admin</a>
+        <button id="cart-btn" class="cart-btn" aria-label="Open cart">🛍️ <span id="cart-count">0</span></button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero container hero-dark">
+      <div class="hero-left">
+        <h1 class="hero-title">Premium Tech<br><span class="accent">Built for performance.</span></h1>
+        <p class="lead">Shop curated audio, wearables, and accessories with a sleek, dark aesthetic.</p>
+        <a href="#catalog" class="btn large primary">Shop CobainTech</a>
+      </div>
+      <div class="hero-right">
+        <div class="hero-glow"></div>
+      </div>
+    </section>
+
+    <section id="catalog" class="container products-grid" aria-live="polite">
+      <!-- Products from Firestore will be inserted here -->
+    </section>
+
+    <section class="container features">
+      <div class="feature">
+        <h3>Secure Checkout</h3>
+        <p>Firebase Auth & Firestore powered — realistic backend demo.</p>
+      </div>
+      <div class="feature">
+        <h3>Order Tracking</h3>
+        <p>Track orders from Pending → Processing → Shipped → Delivered.</p>
+      </div>
+      <div class="feature">
+        <h3>Admin Controls</h3>
+        <p>Admins add/edit/delete products, upload images, and process orders.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Cart panel -->
+  <aside id="cart-panel" class="cart-panel" aria-hidden="true">
+    <div class="cart-head">
+      <h3>Your Cart</h3>
+      <button class="close" onclick="toggleCart(false)">✕</button>
+    </div>
+    <div id="cart-items" class="cart-items"></div>
+    <div class="cart-footer">
+      <div class="cart-total">
+        <span>Total</span>
+        <strong id="cart-total">₱0</strong>
+      </div>
+      <div class="cart-actions">
+        <button id="checkout-btn" class="btn primary" onclick="openCheckout()">Checkout</button>
+        <a href="orders.html" class="btn ghost">My Orders</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Product modal -->
+  <div id="product-modal" class="modal" aria-hidden="true">
+    <div class="modal-inner">
+      <button class="close" onclick="closeProductModal()">✕</button>
+      <div id="product-detail"></div>
+    </div>
+  </div>
+
+  <!-- Checkout modal -->
+  <div id="checkout-modal" class="modal" aria-hidden="true">
+    <div class="modal-inner">
+      <button class="close" onclick="closeCheckout()">✕</button>
+      <div class="checkout-content">
+        <h3>Checkout</h3>
+        <form id="checkout-form" onsubmit="return placeOrder(event)">
+          <label>Full name
+            <input id="chk-name" required />
+          </label>
+          <label>Address
+            <input id="chk-address" required />
+          </label>
+          <label>Contact number
+            <input id="chk-phone" required />
+          </label>
+          <label>Payment method
+            <select id="chk-payment">
+              <option>Cash on Delivery</option>
+              <option>GCash</option>
+              <option>PayPal</option>
+            </select>
+          </label>
+          <div class="checkout-actions">
+            <button type="submit" class="btn primary">Place order</button>
+            <button type="button" class="btn ghost" onclick="closeCheckout()">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>© <span id="year"></span> CobainTech</div>
+      <div class="footer-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Support</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Firebase SDKs (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+  <!-- Your Firebase config init -->
+  <script src="firebase-config.js"></script>
+
+  <!-- Main script -->
+  <script src="script.js"></script>
+</body>
+</html>

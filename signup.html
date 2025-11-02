@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sign Up — CobainTech</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="auth-body">
+  <main class="auth-page">
+    <div class="auth-card">
+      <h2>Create your CobainTech account</h2>
+      <p class="muted">Save orders and track shipping.</p>
+
+      <form onsubmit="return signupUser(event)" class="auth-form">
+        <label>Username
+          <input id="signup-username" required />
+        </label>
+
+        <label>Email
+          <input id="signup-email" type="email" required />
+        </label>
+
+        <label>Password
+          <input id="signup-password" type="password" required minlength="6" />
+        </label>
+
+        <div class="auth-actions">
+          <button class="btn primary" type="submit">Create Account</button>
+          <a href="login.html" class="btn ghost">Sign in</a>
+        </div>
+      </form>
+
+      <p class="muted small"><a href="index.html">Back to store</a></p>
+    </div>
+  </main>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
