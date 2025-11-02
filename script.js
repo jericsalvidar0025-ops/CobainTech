@@ -259,8 +259,7 @@ async function placeOrder(e){
     renderCartCount();
     toggleCart(false);
     closeCheckout();
-    alert(`Order placed! ID: ${orderRef.id}`);
-    window.location.href='orders.html';
+   openOrderSummary(`Your order ID is ${orderRef.id}. You can track its status in "My Orders".`);
   }catch(err){ console.error(err); alert('Checkout failed: '+(err.message||err)); }
   return false;
 }
@@ -380,4 +379,5 @@ async function deleteProduct(id){ if(!confirm('Delete this product?')) return; t
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
