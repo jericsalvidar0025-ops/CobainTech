@@ -1,7 +1,9 @@
-// Import Firebase SDKs
+// firebase-config.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.24.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.24.0/firebase-auth.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/9.24.0/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/9.24.0/firebase-firestore.js";
 
+// Your Firebase project config
 const firebaseConfig = {
   apiKey: "AIzaSyBDYLrPmmPvu0PfEa6qIDv4kgyHQM8mQ54",
   authDomain: "cobaintech-aff85.firebaseapp.com",
@@ -12,20 +14,11 @@ const firebaseConfig = {
   measurementId: "G-1BEEG4EVBR"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 
-// Example signup function
-document.getElementById("signupForm").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const email = document.getElementById("signupEmail").value;
-  const password = document.getElementById("signupPassword").value;
-  createUserWithEmailAndPassword(auth, email, password)
-    .then((userCredential) => {
-      alert("Sign up successful!");
-      window.location.href = "login.html";
-    })
-    .catch((error) => {
-      alert(error.message);
-    });
-});
+// Make Firebase accessible globally
+window.auth = auth;
+window.db = db;
