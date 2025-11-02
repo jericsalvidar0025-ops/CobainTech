@@ -17,7 +17,7 @@
       </div>
 
       <div class="search-wrap">
-        <input id="search-input" type="search" placeholder="Search products — headphones, watch, speaker..." />
+        <input id="search-input" type="search" placeholder="Search products..." />
         <select id="category-filter" aria-label="Category filter">
           <option value="">All categories</option>
         </select>
@@ -40,34 +40,8 @@
   </header>
 
   <main>
-    <section class="hero container hero-dark">
-      <div class="hero-left">
-        <h1 class="hero-title">Premium Tech<br><span class="accent">Built for performance.</span></h1>
-        <p class="lead">Shop curated audio, wearables, and accessories with a sleek, dark aesthetic.</p>
-        <a href="#catalog" class="btn large primary">Shop CobainTech</a>
-      </div>
-      <div class="hero-right">
-        <div class="hero-glow"></div>
-      </div>
-    </section>
-
     <section id="catalog" class="container products-grid" aria-live="polite">
-      <!-- Products from Firestore will be inserted here -->
-    </section>
-
-    <section class="container features">
-      <div class="feature">
-        <h3>Secure Checkout</h3>
-        <p>Firebase Auth & Firestore powered — realistic backend demo.</p>
-      </div>
-      <div class="feature">
-        <h3>Order Tracking</h3>
-        <p>Track orders from Pending → Processing → Shipped → Delivered.</p>
-      </div>
-      <div class="feature">
-        <h3>Admin Controls</h3>
-        <p>Admins add/edit/delete products, upload images, and process orders.</p>
-      </div>
+      <!-- Products from Firestore will be injected here -->
     </section>
   </main>
 
@@ -89,14 +63,6 @@
       </div>
     </div>
   </aside>
-
-  <!-- Product modal -->
-  <div id="product-modal" class="modal" aria-hidden="true">
-    <div class="modal-inner">
-      <button class="close" onclick="closeProductModal()">✕</button>
-      <div id="product-detail"></div>
-    </div>
-  </div>
 
   <!-- Checkout modal -->
   <div id="checkout-modal" class="modal" aria-hidden="true">
@@ -147,10 +113,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
-  <!-- Your Firebase config init -->
   <script src="firebase-config.js"></script>
-
-  <!-- Main script -->
   <script src="script.js"></script>
 </body>
 </html>
+qqqq
