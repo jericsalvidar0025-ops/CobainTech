@@ -1,9 +1,6 @@
-// firebase-config.js
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.24.0/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/9.24.0/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/9.24.0/firebase-firestore.js";
+// firebase-config.js — fixed for compat SDK
 
-// Your Firebase project config
+// Initialize Firebase using compat syntax (no import)
 const firebaseConfig = {
   apiKey: "AIzaSyBDYLrPmmPvu0PfEa6qIDv4kgyHQM8mQ54",
   authDomain: "cobaintech-aff85.firebaseapp.com",
@@ -15,10 +12,9 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
 
-// Make Firebase accessible globally
-window.auth = auth;
-window.db = db;
+// Initialize Firebase services
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
