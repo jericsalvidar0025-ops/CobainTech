@@ -286,6 +286,26 @@ function initOrdersPage(){
     `).join('');
   });
 }
+function openOrderSummary(text){
+  const modal = q('#order-summary-modal');
+  if(modal){
+    q('#summary-text').textContent = text;
+    modal.style.display='flex';
+    modal.setAttribute('aria-hidden','false');
+  }
+}
+
+function closeOrderSummary(){
+  const modal = q('#order-summary-modal');
+  if(modal){
+    modal.style.display='none';
+    modal.setAttribute('aria-hidden','true');
+  }
+}
+
+function goToOrders(){
+  window.location.href='orders.html';
+}
 
 /* ---------- Admin helpers (add/edit/delete products) ---------- */
 let adminProducts=[];
@@ -360,3 +380,4 @@ async function deleteProduct(id){ if(!confirm('Delete this product?')) return; t
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
