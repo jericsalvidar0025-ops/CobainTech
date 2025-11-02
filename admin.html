@@ -3,315 +3,164 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CobainTech Admin Dashboard</title>
+<title>Admin Dashboard — CobainTech</title>
 <link rel="stylesheet" href="style.css">
 <style>
-  body {
-    margin: 0;
-    font-family: 'Segoe UI', Roboto, sans-serif;
-    background: #121212;
-    color: #eee;
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-  }
-
-  /* Sidebar */
-  .sidebar {
-    width: 240px;
-    background: #1F1F1F;
-    display: flex;
-    flex-direction: column;
-    padding: 16px;
-    border-right: 1px solid #333;
-  }
-  .sidebar h2 { color: #4FC3F7; text-align: center; margin-bottom: 24px; }
-  .sidebar nav a {
-    display: block;
-    padding: 12px 16px;
-    color: #eee;
-    margin-bottom: 8px;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: bold;
-    transition: 0.2s;
-  }
-  .sidebar nav a:hover, .sidebar nav a.active { background: #4FC3F7; color: #121212; }
-
-  /* Main content */
-  .main-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  header.site-header {
-    background: #1F1F1F;
-    padding: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #333;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  header.site-header h1 { margin: 0; font-size: 1.5rem; }
-  .header-actions button {
-    background: #333;
-    color: #eee;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: 0.2s;
-  }
-  .header-actions button:hover { background: #4FC3F7; color: #121212; }
-
-  .container { padding: 16px; }
-
-  /* Stats Cards */
-  .stats-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 24px 0; }
-  .stat-card {
-    background: #1F1F1F;
-    padding: 16px;
-    border-radius: 12px;
-    text-align: center;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-  }
-  .stat-card h3 { font-size: 1.2rem; color: #bbb; margin-bottom: 8px; }
-  .stat-card p { font-size: 1.6rem; font-weight: bold; }
-
-  /* Table */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 16px;
-  }
-  table th, table td { padding: 12px; text-align: left; }
-  table thead { background: #1F1F1F; }
-  table tbody tr { border-bottom: 1px solid #333; transition: 0.2s; }
-  table tbody tr:hover { background: #222; }
-  .status-badge {
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-weight: bold;
-    color: #fff;
-    display: inline-block;
-    font-size: 0.85rem;
-  }
-  .status-Pending { background: orange; }
-  .status-Processing { background: #3498db; }
-  .status-Shipped { background: purple; }
-  .status-Delivered { background: green; }
-  button.update-btn, button.export-btn {
-    background: #4FC3F7;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-weight: bold;
-    color: #121212;
-    cursor: pointer;
-    transition: 0.2s;
-  }
-  button.update-btn:hover, button.export-btn:hover { background: #36b0e0; }
-
-  @media (max-width: 768px) {
-    body { flex-direction: column; }
-    .sidebar { width: 100%; flex-direction: row; overflow-x: auto; }
-    .sidebar nav a { margin: 0 8px; }
-  }
+  body { background:#121212; color:#eee; font-family: 'Segoe UI', sans-serif; margin:0; }
+  header { background:#1F1F1F; padding:16px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.5); }
+  header a { color:#fff; text-decoration:none; font-weight:600; margin-right:16px; }
+  h1,h2,h3 { margin:0 0 12px 0; }
+  table { width:100%; border-collapse:collapse; margin-top:16px; }
+  th, td { padding:12px; text-align:left; border-bottom:1px solid #333; }
+  th { background:#1F1F1F; }
+  tr:hover { background:#222; }
+  button { cursor:pointer; border:none; border-radius:6px; padding:6px 12px; font-weight:600; }
+  .btn.primary { background:#3498db; color:#fff; }
+  .btn.ghost { background:#333; color:#eee; }
+  #product-form input, #product-form select { background:#222; color:#eee; border:none; border-radius:6px; padding:8px; width:100%; margin-bottom:12px; }
+  #products-section { padding:24px; max-width:1000px; margin:auto; }
+  img.product-thumb { width:60px; height:60px; object-fit:cover; border-radius:6px; }
 </style>
 </head>
 <body>
 
-<!-- Sidebar -->
-<div class="sidebar">
-  <h2>CT Admin</h2>
+<header>
+  <h1>Admin Dashboard</h1>
   <nav>
-    <a href="#" class="active" data-section="dashboard">Dashboard</a>
-    <a href="#" data-section="orders">Orders</a>
-    <a href="#" data-section="products">Products</a>
-    <a href="#" data-section="users">Users</a>
-    <a href="#" data-section="settings">Settings</a>
+    <a href="index.html">Store</a>
+    <span id="welcome-user-top"></span>
+    <button onclick="logoutUser()" class="btn ghost">Logout</button>
   </nav>
-</div>
+</header>
 
-<!-- Main Content -->
-<div class="main-content">
-  <header class="site-header">
-    <h1>Dashboard</h1>
-    <div class="header-actions">
-      <button onclick="logoutUser()">Logout</button>
-    </div>
-  </header>
+<main>
+  <div id="products-section">
+    <h2>Products Management</h2>
 
-  <div class="container" id="section-content">
-
-    <!-- Dashboard Section -->
-    <div id="dashboard-section">
-      <div class="stats-cards">
-        <div class="stat-card"><h3>Total Orders</h3><p id="stat-orders">0</p></div>
-        <div class="stat-card"><h3>Total Revenue</h3><p id="stat-revenue">₱0</p></div>
-        <div class="stat-card"><h3>Total Products</h3><p id="stat-products">0</p></div>
-        <div class="stat-card"><h3>Pending Orders</h3><p id="stat-pending">0</p></div>
-      </div>
+    <!-- Add / Update Product Form -->
+    <div style="margin-bottom:24px; background:#1F1F1F; padding:16px; border-radius:12px; box-shadow:0 4px 8px rgba(0,0,0,0.3);">
+      <h3 id="form-title">Add New Product</h3>
+      <form id="product-form">
+        <input id="prod-title" placeholder="Product Title" required>
+        <input type="number" id="prod-price" placeholder="Price" required>
+        <input id="prod-category" placeholder="Category" required>
+        <input id="prod-image" type="url" placeholder="Image URL (https://example.com/image.jpg)" required>
+        <div style="margin-top:12px;">
+          <button type="submit" class="btn primary">Save Product</button>
+          <button type="button" class="btn ghost" onclick="resetProductForm()">Cancel</button>
+        </div>
+      </form>
     </div>
 
-    <!-- Orders Section -->
-    <div id="orders-section" style="display:none;">
-      <div style="margin-bottom:16px;">
-        <input id="search-input" placeholder="Search by customer or order ID" style="padding:8px 12px;border-radius:6px;border:none;background:#1F1F1F;color:#eee;margin-right:8px;">
-        <select id="status-filter" style="padding:8px 12px;border-radius:6px;border:none;background:#1F1F1F;color:#eee;">
-          <option value="">All Status</option>
-          <option value="Pending">Pending</option>
-          <option value="Processing">Processing</option>
-          <option value="Shipped">Shipped</option>
-          <option value="Delivered">Delivered</option>
-        </select>
-        <button class="export-btn" onclick="exportOrdersCSV()">Export CSV</button>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Order ID</th>
-            <th>Customer</th>
-            <th>Items</th>
-            <th>Total</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="admin-orders"></tbody>
-      </table>
-    </div>
-
-    <!-- Products Section -->
-    <div id="products-section" style="display:none;">
-      <h2>Products Management</h2>
-      <p>Coming soon: add, update, delete products here.</p>
-    </div>
-
-    <!-- Users Section -->
-    <div id="users-section" style="display:none;">
-      <h2>Users Management</h2>
-      <p>Coming soon: view and manage users.</p>
-    </div>
-
-    <!-- Settings Section -->
-    <div id="settings-section" style="display:none;">
-      <h2>Settings</h2>
-      <p>Coming soon: configure admin settings.</p>
-    </div>
-
+    <!-- Products Table -->
+    <table>
+      <thead>
+        <tr>
+          <th>Image</th>
+          <th>Title</th>
+          <th>Price</th>
+          <th>Category</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="admin-products"></tbody>
+    </table>
   </div>
-</div>
+</main>
 
-<footer class="site-footer container" style="padding:16px;text-align:center;background:#1F1F1F;border-top:1px solid #333;">
-  © <span id="year"></span> CobainTech
-</footer>
+<footer style="text-align:center; padding:16px; color:#aaa; background:#1F1F1F;">© <span id="year"></span> CobainTech</footer>
 
-<!-- Firebase -->
+<!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
 <script src="script.js"></script>
+
 <script>
+// Set footer year
 document.getElementById('year').textContent = new Date().getFullYear();
 
-const sections = document.querySelectorAll('.sidebar nav a');
-sections.forEach(a=>{
-  a.addEventListener('click', e=>{
-    e.preventDefault();
-    sections.forEach(s=>s.classList.remove('active'));
-    a.classList.add('active');
-    const sec = a.dataset.section;
-    document.querySelectorAll('#section-content > div').forEach(d=>{
-      d.style.display = d.id===sec+'-section'?'block':'none';
-    });
-  });
-});
+// Admin Dashboard JS
+let editingProductId = null;
 
-// Orders
-let allOrders = [];
-let filteredOrders = [];
-
-async function renderDashboard() {
-  const ordersSnap = await db.collection('orders').get();
-  const productsSnap = await db.collection('products').get();
-  allOrders = ordersSnap.docs.map(d => ({ id:d.id, ...d.data() }));
-  filteredOrders = [...allOrders];
-
-  // Stats
-  document.getElementById('stat-orders').textContent = allOrders.length;
-  document.getElementById('stat-revenue').textContent = '₱'+allOrders.reduce((sum,o)=>sum+(o.total||0),0).toLocaleString();
-  document.getElementById('stat-products').textContent = productsSnap.docs.length;
-  document.getElementById('stat-pending').textContent = allOrders.filter(o=>o.status==='Pending').length;
-
-  renderOrdersTable(filteredOrders);
-}
-
-// Render orders table
-function renderOrdersTable(orders){
-  const tbody = document.getElementById('admin-orders');
-  tbody.innerHTML = orders.map(o=>{
-    const itemsHTML = (o.items||[]).map(i=>i.title+'×'+i.qty).join('<br>');
+// Load products
+async function loadProducts() {
+  const snapshot = await db.collection('products').orderBy('createdAt','desc').get();
+  const tbody = document.getElementById('admin-products');
+  tbody.innerHTML = snapshot.docs.map(doc => {
+    const p = doc.data();
     return `<tr>
-      <td>${o.id}</td>
-      <td>${o.userId}</td>
-      <td>${itemsHTML}</td>
-      <td>₱${(o.total||0).toLocaleString()}</td>
-      <td><span class="status-badge status-${o.status}">${o.status}</span></td>
-      <td><button class="update-btn" onclick="updateOrderStatus('${o.id}')">Update</button></td>
+      <td><img src="${p.image}" alt="${p.title}" class="product-thumb"></td>
+      <td>${p.title}</td>
+      <td>₱${(p.price||0).toLocaleString()}</td>
+      <td>${p.category}</td>
+      <td>
+        <button class="btn ghost" onclick="editProduct('${doc.id}')">Edit</button>
+        <button class="btn ghost" style="background:red;color:#fff;" onclick="deleteProduct('${doc.id}')">Delete</button>
+      </td>
     </tr>`;
   }).join('');
 }
 
-// Update order status
-function updateOrderStatus(orderId){
-  const newStatus = prompt('Enter new status (Pending, Processing, Shipped, Delivered):');
-  if(!newStatus) return;
-  db.collection('orders').doc(orderId).update({ status: newStatus }).then(()=>renderDashboard()).catch(console.error);
-}
+// Add / Update product
+document.getElementById('product-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const title = document.getElementById('prod-title').value.trim();
+  const price = parseFloat(document.getElementById('prod-price').value);
+  const category = document.getElementById('prod-category').value.trim();
+  const image = document.getElementById('prod-image').value.trim();
 
-// Filters
-document.getElementById('status-filter').addEventListener('change', e=>{
-  const status = e.target.value;
-  filteredOrders = allOrders.filter(o=>!status || o.status===status);
-  renderOrdersTable(filteredOrders);
-});
-document.getElementById('search-input').addEventListener('input', e=>{
-  const term = e.target.value.toLowerCase();
-  filteredOrders = allOrders.filter(o=>!term || o.userId.toLowerCase().includes(term) || o.id.toLowerCase().includes(term));
-  renderOrdersTable(filteredOrders);
+  if(editingProductId){
+    // Update
+    await db.collection('products').doc(editingProductId).update({ title, price, category, image });
+    editingProductId = null;
+  } else {
+    // Add
+    await db.collection('products').add({ title, price, category, image, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  }
+  resetProductForm();
+  loadProducts();
 });
 
-// Export CSV
-function exportOrdersCSV(){
-  if(!allOrders.length) return alert('No orders to export.');
-  const csvRows = [];
-  const headers = ['Order ID','Customer','Items','Total','Status'];
-  csvRows.push(headers.join(','));
-  allOrders.forEach(o=>{
-    const items = (o.items||[]).map(i=>i.title+'×'+i.qty).join('|');
-    csvRows.push([o.id,o.userId,items,o.total,o.status].join(','));
+// Edit product
+function editProduct(id){
+  editingProductId = id;
+  db.collection('products').doc(id).get().then(doc=>{
+    const p = doc.data();
+    document.getElementById('prod-title').value = p.title;
+    document.getElementById('prod-price').value = p.price;
+    document.getElementById('prod-category').value = p.category;
+    document.getElementById('prod-image').value = p.image;
+    document.getElementById('form-title').textContent = 'Edit Product';
   });
-  const blob = new Blob([csvRows.join('\n')],{type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download='orders.csv'; a.click();
-  URL.revokeObjectURL(url);
 }
 
-// Live updates
-db.collection('orders').onSnapshot(()=>renderDashboard());
+// Delete product
+function deleteProduct(id){
+  if(confirm('Are you sure you want to delete this product?')){
+    db.collection('products').doc(id).delete().then(loadProducts);
+  }
+}
 
-// Auth check
-auth.onAuthStateChanged(user=>{ if(!user) window.location.href='login.html'; else renderDashboard(); });
+// Reset form
+function resetProductForm(){
+  editingProductId = null;
+  document.getElementById('product-form').reset();
+  document.getElementById('form-title').textContent = 'Add New Product';
+}
 
+// Show admin products section after auth check
+auth.onAuthStateChanged(user=>{
+  if(!user){
+    alert('Please login as admin');
+    window.location.href = 'login.html';
+  } else {
+    // Optionally check role from users collection
+    loadProducts();
+  }
+});
 </script>
 </body>
 </html>
