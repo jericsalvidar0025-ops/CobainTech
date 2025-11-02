@@ -3,234 +3,180 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin — CobainTech</title>
+  <title>Admin Panel — CobainTech</title>
   <link rel="stylesheet" href="style.css" />
   <style>
-    /* Admin professional styling */
-    .admin-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; margin-top: 20px; }
-    .admin-col { display: flex; flex-direction: column; gap: 20px; }
-    .admin-list .admin-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #ccc; }
-    .admin-list .admin-item:hover { background: #f9f9f9; }
-    .admin-order { padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; background: #f8f8f8; }
-    .admin-order select { padding: 4px 6px; border-radius: 4px; }
-    .admin-table { width: 100%; border-collapse: collapse; }
-    .admin-table th, .admin-table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    .admin-table th { background: #eee; }
-    .btn.small { padding: 2px 6px; font-size: 0.85rem; }
+    body { background:#0b0c0e; color:#eee; font-family: 'Segoe UI', sans-serif; margin:0; padding:0; }
+    header, footer { background:#111; padding:12px 20px; }
+    header .brand-link { color:#fff; text-decoration:none; font-size:1.2rem; font-weight:bold; }
+    header nav a, header nav button { margin-left:12px; }
+    main { padding:20px; max-width:1200px; margin:auto; }
+    h1 { margin-bottom:20px; }
+    .section { margin-bottom:40px; }
+    
+    /* Admin product table */
+    #admin-product-list {
+      display:grid;
+      grid-template-columns: repeat(auto-fill,minmax(250px,1fr));
+      gap:16px;
+    }
+    .admin-item {
+      background:#1a1b1f;
+      padding:16px;
+      border-radius:12px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:8px;
+      box-shadow:0 4px 12px rgba(0,0,0,0.4);
+    }
+    .admin-item div { font-size:0.95rem; }
+    .admin-item button { font-size:0.85rem; padding:6px 10px; border-radius:6px; cursor:pointer; }
+    .admin-item button:hover { opacity:0.9; }
+
+    /* Product form */
+    #product-form-area {
+      background:#1a1b1f;
+      padding:20px;
+      border-radius:12px;
+      margin-bottom:30px;
+      display:none;
+      box-shadow:0 6px 20px rgba(0,0,0,0.5);
+    }
+    #product-form label { display:block; margin-bottom:12px; }
+    #product-form input, #product-form textarea, #product-form select {
+      width:100%; padding:8px; border-radius:6px; border:1px solid #333; background:#111; color:#eee;
+      margin-top:4px;
+    }
+    #product-form button { margin-top:12px; }
+
+    /* Admin orders table */
+    table { width:100%; border-collapse:collapse; margin-top:16px; }
+    th, td { padding:12px 8px; text-align:left; }
+    th { background:#1a1b1f; color:#fff; font-weight:600; }
+    tr:nth-child(even) { background:#111; }
+    tr:hover { background:#222; }
+    td button { padding:6px 10px; font-size:0.85rem; border-radius:6px; }
+
+    .status-Pending { color:orange; font-weight:bold; }
+    .status-Processing { color:#3498db; font-weight:bold; }
+    .status-Shipped { color:purple; font-weight:bold; }
+    .status-Delivered { color:green; font-weight:bold; }
+
+    /* Buttons */
+    .btn { padding:6px 12px; border:none; border-radius:6px; cursor:pointer; font-weight:500; }
+    .btn.primary { background:#3498db; color:#fff; }
+    .btn.ghost { background:transparent; color:#fff; border:1px solid #555; }
+    .btn.small { font-size:0.85rem; padding:4px 8px; }
+
+    /* Responsive tweaks */
+    @media(max-width:768px){
+      #admin-product-list { grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); }
+    }
   </style>
 </head>
 <body>
   <header class="site-header">
     <div class="container header-inner">
       <div class="brand">
-        <a href="index.html" class="brand-link">
-          <span class="logo-mark">CT</span>
-          <span class="brand-name">CobainTech</span>
-        </a>
+        <a href="index.html" class="brand-link">CobainTech Admin</a>
       </div>
       <nav class="actions">
-        <a href="index.html" class="btn ghost">Open Store</a>
-        <button class="btn" onclick="logoutUser()">Logout</button>
+        <span id="welcome-user-top" class="welcome-user"></span>
+        <button class="btn" onclick="auth.signOut()">Logout</button>
       </nav>
     </div>
   </header>
 
-  <main class="container admin-grid">
-    <aside class="admin-col">
-      <!-- Products Section -->
-      <div class="card">
-        <h3>Products</h3>
-        <div class="admin-actions">
-          <button class="btn primary" onclick="showAddProduct()">+ Add Product</button>
-          <input id="admin-search" placeholder="Search products..." oninput="renderAdminProducts()" />
-        </div>
-        <div id="admin-product-list" class="admin-list"></div>
+  <main>
+    <h1>Admin Dashboard</h1>
+
+    <!-- Product management -->
+    <section class="section">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2>Products</h2>
+        <button class="btn primary" onclick="showAddProduct()">Add Product</button>
       </div>
 
-      <!-- Orders Section -->
-      <div class="card">
-        <h3>Customer Orders</h3>
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Customer</th>
-              <th>Items</th>
-              <th>Total</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="admin-orders"></tbody>
-        </table>
-      </div>
-    </aside>
+      <!-- Search -->
+      <input id="admin-search" type="text" placeholder="Search products..." style="width:100%; padding:8px; margin-bottom:16px; border-radius:6px; border:1px solid #333; background:#111; color:#eee;" />
 
-    <section class="admin-main">
-      <div id="product-form-area" class="card" style="display:none">
+      <!-- Product form -->
+      <div id="product-form-area">
         <h3 id="product-form-title">Add Product</h3>
         <form id="product-form" onsubmit="return saveProduct(event)">
-          <input id="p-id" type="hidden" />
-          <label>Title <input id="p-title" required /></label>
-          <label>Price (₱) <input id="p-price" type="number" required min="0" step="1" /></label>
-          <label>Stock <input id="p-stock" type="number" required min="0" /></label>
-          <label>Category <input id="p-category" required /></label>
-          <label>Description <textarea id="p-desc" rows="4"></textarea></label>
-          <label>Image URL <input id="p-image-url" type="url" placeholder="https://example.com/product.jpg" /></label>
-          <div class="form-actions">
-            <button class="btn primary" type="submit">Save</button>
-            <button type="button" class="btn ghost" onclick="hideProductForm()">Cancel</button>
-          </div>
+          <input type="hidden" id="p-id" />
+          <label>Title<input id="p-title" required /></label>
+          <label>Price<input type="number" id="p-price" required /></label>
+          <label>Stock<input type="number" id="p-stock" required /></label>
+          <label>Category<input id="p-category" required /></label>
+          <label>Description<textarea id="p-desc"></textarea></label>
+          <label>Image URL<input id="p-image-url" /></label>
+          <button type="submit" class="btn primary">Save</button>
+          <button type="button" class="btn ghost" onclick="hideProductForm()">Cancel</button>
         </form>
       </div>
 
-      <div id="admin-welcome" class="card">
-        <h2>Admin Dashboard</h2>
-        <p>Manage products and customer orders. Firestore keeps data in sync across devices.</p>
+      <div id="admin-product-list">
+        <!-- Products injected here -->
       </div>
+    </section>
+
+    <!-- Orders management -->
+    <section class="section">
+      <h2>Orders</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Customer</th>
+            <th>Items</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="admin-orders">
+          <!-- Orders injected here -->
+        </tbody>
+      </table>
     </section>
   </main>
 
-  <footer class="site-footer container">
-    <div>Admin • CobainTech Demo</div>
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>© <span id="year"></span> CobainTech</div>
+    </div>
   </footer>
 
-  <!-- Firebase SDKs -->
+  <!-- Firebase SDKs (compat) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
   <script src="firebase-config.js"></script>
   <script src="script.js"></script>
 
   <script>
-    /* ---------- Admin: Products ---------- */
-    let adminProducts = [];
-    function initAdmin(){
-      const list = document.getElementById('admin-product-list');
-      if(!list) return;
-      db.collection('products').orderBy('createdAt','desc').onSnapshot(snapshot=>{
-        adminProducts = [];
-        snapshot.forEach(doc=>adminProducts.push({id: doc.id, ...doc.data()}));
-        renderAdminProducts();
-      });
-    }
+    document.getElementById('year').textContent = new Date().getFullYear();
 
-    function renderAdminProducts(){
-      const list = document.getElementById('admin-product-list');
-      if(!list) return;
-      const search = document.getElementById('admin-search').value.trim().toLowerCase();
-      let filtered = adminProducts;
-      if(search) filtered = filtered.filter(p=>p.title.toLowerCase().includes(search) || p.category.toLowerCase().includes(search));
-      list.innerHTML = filtered.map(p=>`
-        <div class="admin-item">
-          <div>${p.title}</div>
-          <div>₱${p.price.toLocaleString()}</div>
-          <div>${p.category}</div>
-          <div>
-            <button class="btn small" onclick="editProduct('${p.id}')">Edit</button>
-            <button class="btn ghost small" onclick="deleteProduct('${p.id}')">Delete</button>
-          </div>
-        </div>
-      `).join('');
-    }
+    // Admin product search
+    const searchInput = document.getElementById('admin-search');
+    if(searchInput) searchInput.addEventListener('input', () => renderAdminProducts());
 
-    function showAddProduct(){
-      document.getElementById('product-form-area').style.display='block';
-      document.getElementById('product-form-title').textContent='Add Product';
-      document.getElementById('product-form').reset();
-      document.getElementById('p-id').value='';
-    }
-
-    function hideProductForm(){ document.getElementById('product-form-area').style.display='none'; }
-
-    async function saveProduct(e){
-      e.preventDefault();
-      const id = document.getElementById('p-id').value;
-      const title = document.getElementById('p-title').value.trim();
-      const price = Number(document.getElementById('p-price').value);
-      const stock = Number(document.getElementById('p-stock').value);
-      const category = document.getElementById('p-category').value.trim();
-      const desc = document.getElementById('p-desc').value.trim();
-      const imgUrl = document.getElementById('p-image-url').value.trim();
-
-      if(!title || isNaN(price)) return alert('Invalid input');
-
-      const data = {title, price, stock, category, desc};
-      if(imgUrl) data.imgUrl = imgUrl;
-
-      try{
-        if(id) await db.collection('products').doc(id).update(data);
-        else await db.collection('products').add({...data, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
-        hideProductForm();
-      }catch(err){ console.error(err); alert('Failed to save product: '+err.message); }
-    }
-
-    async function editProduct(id){
-      const doc = await db.collection('products').doc(id).get();
-      if(!doc.exists) return alert('Product not found');
-      const p = doc.data();
-      document.getElementById('p-id').value = doc.id;
-      document.getElementById('p-title').value = p.title;
-      document.getElementById('p-price').value = p.price;
-      document.getElementById('p-stock').value = p.stock || 0;
-      document.getElementById('p-category').value = p.category;
-      document.getElementById('p-desc').value = p.desc || '';
-      document.getElementById('p-image-url').value = p.imgUrl || '';
-      document.getElementById('product-form-area').style.display='block';
-      document.getElementById('product-form-title').textContent='Edit Product';
-    }
-
-    async function deleteProduct(id){
-      if(!confirm('Delete this product?')) return;
-      try{ await db.collection('products').doc(id).delete(); } 
-      catch(err){ console.error(err); alert('Delete failed'); }
-    }
-
-    /* ---------- Admin: Orders ---------- */
-    function initAdminOrders(){
-      const tbody = document.getElementById('admin-orders');
-      if(!tbody) return;
-
-      db.collection('orders').orderBy('createdAt','desc').onSnapshot(snapshot=>{
-        const rows = [];
-        snapshot.forEach(doc=>{
-          const o = {id: doc.id, ...doc.data()};
-          const items = o.items.map(i=>`${i.title} ×${i.qty}`).join('<br>');
-          const statusColor = {'Pending':'orange','Processing':'blue','Shipped':'purple','Delivered':'green'}[o.status] || 'gray';
-          rows.push(`
-            <tr>
-              <td>${o.id}</td>
-              <td>${o.userName}</td>
-              <td>${items}</td>
-              <td>₱${o.total.toLocaleString()}</td>
-              <td style="color:${statusColor};font-weight:bold">${o.status}</td>
-              <td>
-                <select onchange="updateOrderStatus('${o.id}', this.value)">
-                  <option ${o.status==='Pending'?'selected':''}>Pending</option>
-                  <option ${o.status==='Processing'?'selected':''}>Processing</option>
-                  <option ${o.status==='Shipped'?'selected':''}>Shipped</option>
-                  <option ${o.status==='Delivered'?'selected':''}>Delivered</option>
-                </select>
-              </td>
-            </tr>
-          `);
+    // Bind welcome user
+    auth.onAuthStateChanged(user => {
+      if(user){
+        const welcome = document.getElementById('welcome-user-top');
+        usersRef().doc(user.uid).get().then(doc=>{
+          if(doc.exists) welcome.textContent = `Hi, ${doc.data().username}`;
         });
-        tbody.innerHTML = rows.join('');
-      });
-    }
-
-    function updateOrderStatus(orderId, status){
-      db.collection('orders').doc(orderId).update({status})
-        .then(()=>console.log(`Order ${orderId} updated to ${status}`))
-        .catch(err=>console.error(err));
-    }
-
-    /* ---------- Initialize Admin ---------- */
-    window.addEventListener('load', ()=>{
-      initAdmin();
-      initAdminOrders();
+      }
     });
+
+    // Initialize admin
+    window.addEventListener('load', () => initAdmin());
   </script>
 </body>
 </html>
