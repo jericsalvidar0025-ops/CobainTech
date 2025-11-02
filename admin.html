@@ -166,26 +166,28 @@ function showTab(tab){
   });
 }
 
-// Products rendering with images
+// Products rendering with Firestore imgUrl
 function renderAdminProducts(){
-  const container=document.getElementById('admin-product-list');
-  db.collection('products').get().then(snapshot=>{
+  const container = document.getElementById('admin-product-list');
+  db.collection('products').orderBy('createdAt','desc').get().then(snapshot=>{
     const products=[];
     snapshot.forEach(doc=>{
-      const p=doc.data();
-      p.id=doc.id;
-      if(!document.getElementById('admin-search').value || p.title.toLowerCase().includes(document.getElementById('admin-search').value.toLowerCase())){
+      const p = doc.data();
+      p.id = doc.id;
+      const searchValue = (document.getElementById('admin-search').value||'').toLowerCase();
+      if(!searchValue || p.title.toLowerCase().includes(searchValue) || (p.category||'').toLowerCase().includes(searchValue)){
         products.push(p);
       }
     });
-    container.innerHTML=products.map(p=>`
+
+    container.innerHTML = products.map(p=>`
       <div class="product-card">
-        <img src="${p.imageUrl||'https://via.placeholder.com/150'}">
+        <img src="${p.imgUrl||'https://via.placeholder.com/150'}" alt="${p.title}">
         <div class="product-info">
           <h4>${p.title}</h4>
           <p>₱${p.price.toLocaleString()}</p>
-          <p>Stock: ${p.stock}</p>
-          <p>Category: ${p.category}</p>
+          <p>Stock: ${p.stock||0}</p>
+          <p>Category: ${p.category||''}</p>
           <div class="actions">
             <button class="btn small primary" onclick="editProduct('${p.id}')">Edit</button>
             <button class="btn small ghost" onclick="deleteProduct('${p.id}')">Delete</button>
@@ -199,17 +201,21 @@ function renderAdminProducts(){
 // Sales chart
 let salesChart;
 function renderSalesChart(){
-  const ctx=document.getElementById('salesChart').getContext('2d');
+  const ctx = document.getElementById('salesChart').getContext('2d');
   db.collection('orders').orderBy('createdAt').get().then(snapshot=>{
-    const labels=[], data=[];
+    const labels = [], data = [];
     snapshot.forEach(doc=>{
-      const o=doc.data();
-      const date=o.createdAt?.toDate().toLocaleDateString()||'';
+      const o = doc.data();
+      const date = o.createdAt?.toDate().toLocaleDateString() || '';
       labels.push(date);
       data.push(o.total||0);
     });
     if(salesChart) salesChart.destroy();
-    salesChart=new Chart(ctx,{type:'line',data:{labels, datasets:[{label:'Order Total', data, borderColor:'#3498db', backgroundColor:'rgba(52,152,219,0.2)'}]},options:{responsive:true,plugins:{legend:{display:false}}}});
+    salesChart = new Chart(ctx,{
+      type:'line',
+      data:{labels, datasets:[{label:'Order Total', data, borderColor:'#3498db', backgroundColor:'rgba(52,152,219,0.2)'}]},
+      options:{responsive:true, plugins:{legend:{display:false}}}
+    });
   });
 }
 
