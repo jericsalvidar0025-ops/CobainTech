@@ -370,16 +370,14 @@ function initAdmin(){
 }
 
 function renderAdminProducts(){
-  const container = q('#admin-product-list'); if(!container) return;
+  const container = q('#admin-product-list'); 
+  if(!container) return;
   const search = (q('#admin-search')||{}).value?.trim().toLowerCase();
   let list = adminProducts;
   if(search) list = list.filter(p=>p.title.toLowerCase().includes(search)||p.category.toLowerCase().includes(search));
+  
   container.innerHTML = list.map(p=>{
-    let imgSrc = p.imgUrl || p.img || placeholderDataURL(p.title);
-    if(!imgSrc.startsWith('http') && !imgSrc.startsWith('data:')){
-      // prepend http if relative path (optional)
-      imgSrc = imgSrc; // or leave as is if you store full URLs only
-    }
+    const imgSrc = p.imgUrl || placeholderDataURL(p.title); // use imgUrl from Firestore
     return `
       <div class="admin-item" style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #333">
         <div style="flex:0 0 80px;">
@@ -398,6 +396,7 @@ function renderAdminProducts(){
     `;
   }).join('');
 }
+
 
 
 
@@ -483,5 +482,6 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
