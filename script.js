@@ -228,23 +228,42 @@ function renderCartUI(){
 async function placeOrder(e){
   e.preventDefault();
   const user = auth.currentUser;
-  if(!user){ alert('Please login first'); window.location.href='login.html'; return false; }
+  if(!user){
+    alert('Please login first');
+    window.location.href='login.html';
+    return false;
+  }
 
   const name = (q('#chk-name')||{}).value?.trim();
   const address = (q('#chk-address')||{}).value?.trim();
   const phone = (q('#chk-phone')||{}).value?.trim();
   const payment = (q('#chk-payment')||{}).value || 'COD';
-  if(!name||!address||!phone){ alert('Complete all fields'); return false; }
+
+  if(!name || !address || !phone){
+    alert('Complete all fields');
+    return false;
+  }
 
   const cart = getCart();
   if(!cart.length){ alert('Cart is empty'); return false; }
 
-  try{
+  try {
+    // Fetch latest product info
     const snaps = await Promise.all(cart.map(ci=>productsRef().doc(ci.id).get()));
     const invalid = snaps.filter(s=>!s.exists);
-    if(invalid.length){ alert('Some items are no longer available. Refresh cart.'); return false; }
-    const items = snaps.map((doc,idx)=>({ productId: doc.id, title: doc.data().title, price: doc.data().price, qty: cart[idx].qty }));
-    const total = items.reduce((sum,i)=>sum+i.price*i.qty,0);
+    if(invalid.length){
+      alert('Some items are no longer available. Refresh cart.');
+      return false;
+    }
+
+    const items = snaps.map((doc, idx)=>({
+      productId: doc.id,
+      title: doc.data().title,
+      price: doc.data().price,
+      qty: cart[idx].qty
+    }));
+
+    const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
 
     const orderObj = {
       userId: user.uid,
@@ -254,19 +273,30 @@ async function placeOrder(e){
       payment,
       items,
       total,
-      status:'Pending',
+      status: 'Pending',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    const orderRef = await ordersRef().add(orderObj);
+    await ordersRef().add(orderObj);
+
+    // Clear cart
     saveCart([]);
     renderCartCount();
     toggleCart(false);
     closeCheckout();
-    openOrderSummary(`Your order ID is ${orderRef.id}. You can track its status in "My Orders".`);
-  }catch(err){ console.error(err); alert('Checkout failed: '+(err.message||err)); }
+
+    // Redirect to My Orders page
+    alert('Order placed successfully! You will be redirected to My Orders.');
+    window.location.href = 'orders.html';
+
+  } catch(err){
+    console.error(err);
+    alert('Checkout failed: ' + (err.message || err));
+  }
+
   return false;
 }
+
 
 function openCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='flex'; modal.setAttribute('aria-hidden','false'); }
 function closeCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='none'; modal.setAttribute('aria-hidden','true'); }
@@ -421,3 +451,4 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
