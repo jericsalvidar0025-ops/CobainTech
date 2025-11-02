@@ -20,6 +20,7 @@
       padding: 2px 6px;
       border-radius: 4px;
       font-weight: bold;
+      color: #fff;
     }
     .status-Pending { background: orange; }
     .status-Processing { background: #3498db; }
@@ -39,7 +40,7 @@
       <nav class="actions">
         <a href="index.html" class="btn ghost">Store</a>
         <span id="welcome-user-top" class="welcome-user"></span>
-        <button class="btn" onclick="logoutUser()">Logout</button>
+        <button class="btn" onclick="auth.signOut()">Logout</button>
       </nav>
     </div>
   </header>
@@ -52,7 +53,7 @@
   </main>
 
   <footer class="site-footer container">
-    <div>© <span id="year">{year}</span> CobainTech</div>
+    <div>© <span id="year"></span> CobainTech</div>
   </footer>
 
   <!-- Firebase SDKs -->
@@ -68,12 +69,10 @@
 
   <script>
     // Set footer year
-    function setFooterYear(){ 
-      document.getElementById('year').textContent = new Date().getFullYear(); 
-    }
+    document.getElementById('year').textContent = new Date().getFullYear();
 
-    // Initialize customer orders (uses updated script.js function)
-    function initCustomerOrdersPage(){
+    // Show orders for logged-in user
+    function loadCustomerOrders() {
       const container = document.getElementById('orders-table');
       if(!container) return;
 
@@ -124,11 +123,8 @@
       });
     }
 
-    // Initialize page on load
     window.addEventListener('load', () => {
-      setFooterYear();
-      bindAuthState();       // From script.js
-      initCustomerOrdersPage(); // Load orders
+      loadCustomerOrders();
     });
   </script>
 </body>
