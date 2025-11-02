@@ -374,21 +374,34 @@ function renderAdminProducts(){
   if(!container) return;
   const search = (q('#admin-search')||{}).value?.trim().toLowerCase();
   let list = adminProducts;
-  if(search) list = list.filter(p=>p.title.toLowerCase().includes(search)||p.category.toLowerCase().includes(search));
-  
+  if(search) list = list.filter(p => 
+    p.title.toLowerCase().includes(search) || 
+    (p.category || '').toLowerCase().includes(search)
+  );
+
   container.innerHTML = list.map(p=>{
-    const imgSrc = p.imgUrl || placeholderDataURL(p.title); // use imgUrl from Firestore
+    const imgSrc = p.imgUrl || placeholderDataURL(p.title); // ensure imgUrl is used
     return `
-      <div class="admin-item" style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #333">
-        <div style="flex:0 0 80px;">
-          <img src="${imgSrc}" alt="${escapeHtml(p.title)}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;">
+      <div class="admin-item" style="
+          display:flex; 
+          align-items:center; 
+          gap:12px; 
+          padding:12px; 
+          border-bottom:1px solid #333;
+          background:#111;
+          color:#eee;
+          border-radius:8px;
+        ">
+        <div style="flex:0 0 100px;">
+          <img src="${imgSrc}" alt="${escapeHtml(p.title)}" 
+               style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:1px solid #444;">
         </div>
-        <div style="flex:1;">
-          <div><strong>${escapeHtml(p.title)}</strong></div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+          <strong>${escapeHtml(p.title)}</strong>
           <div>${money(p.price)}</div>
-          <div>${escapeHtml(p.category)}</div>
+          <div style="opacity:0.7">${escapeHtml(p.category)}</div>
         </div>
-        <div style="flex:0 0 auto; display:flex; gap:6px;">
+        <div style="flex:0 0 auto; display:flex; gap:8px;">
           <button class="btn small" onclick="editProduct('${p.id}')">Edit</button>
           <button class="btn ghost small" onclick="deleteProduct('${p.id}')">Delete</button>
         </div>
@@ -396,6 +409,7 @@ function renderAdminProducts(){
     `;
   }).join('');
 }
+
 
 
 
@@ -482,6 +496,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
