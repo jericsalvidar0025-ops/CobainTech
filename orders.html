@@ -9,35 +9,85 @@
 <body>
   <header class="site-header">
     <div class="container header-inner">
-      <div class="brand"><a href="index.html" class="brand-link"><span class="logo-mark">CT</span><span class="brand-name">CobainTech</span></a></div>
+      <div class="brand">
+        <a href="index.html" class="brand-link">
+          <span class="logo-mark">CT</span>
+          <span class="brand-name">CobainTech</span>
+        </a>
+      </div>
       <nav class="actions">
         <a href="index.html" class="btn ghost">Store</a>
-        <a id="orders-login-link" href="login.html" class="btn ghost">Login</a>
+        <span id="welcome-user-top" class="welcome-user"></span>
         <button class="btn" onclick="logoutUser()">Logout</button>
       </nav>
     </div>
   </header>
 
   <main class="container">
-    <section class="card">
-      <h2>My Orders</h2>
-      <div id="orders-list" class="orders-list"></div>
-    </section>
+    <h1>My Orders</h1>
+    <div id="orders-table">
+      <!-- Orders will be rendered here -->
+    </div>
   </main>
 
-  <footer class="site-footer">
-    <div class="container footer-inner">
-      <div>© <span id="year2"></span> CobainTech</div>
-    </div>
+  <footer class="site-footer container">
+    <div>© <span id="year"></span> CobainTech</div>
   </footer>
 
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
   <script src="firebase-config.js"></script>
   <script src="script.js"></script>
+
+  <script>
+    // Render orders in real-time for logged-in customer
+    function initCustomerOrders(){
+      const container = document.getElementById('orders-table');
+      if(!container) return;
+
+      auth.onAuthStateChanged(user=>{
+        if(!user){
+          alert('Please login to view your orders');
+          window.location.href = 'login.html';
+          return;
+        }
+
+        db.collection('orders')
+          .where('userId','==',user.uid)
+          .orderBy('createdAt','desc')
+          .onSnapshot(snapshot=>{
+            const orders = [];
+            snapshot.forEach(doc=>{
+              orders.push({id: doc.id, ...doc.data()});
+            });
+
+            if(!orders.length){
+              container.innerHTML = '<p>You have no orders yet.</p>';
+              return;
+            }
+
+            container.innerHTML = orders.map(o=>`
+              <div class="order-card">
+                <div><strong>Order ID:</strong> ${o.id}</div>
+                <div><strong>Date:</strong> ${o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : ''}</div>
+                <div><strong>Total:</strong> ₱${o.total.toLocaleString()}</div>
+                <div><strong>Status:</strong> <span class="order-status">${o.status}</span></div>
+                <div><strong>Items:</strong><br/>${o.items.map(i=>`${i.title} ×${i.qty}`).join('<br/>')}</div>
+                <hr/>
+              </div>
+            `).join('');
+          });
+      });
+    }
+
+    window.addEventListener('load', ()=>{
+      setFooterYear();
+      bindAuthState();
+      initCustomerOrders();
+    });
+  </script>
 </body>
 </html>
