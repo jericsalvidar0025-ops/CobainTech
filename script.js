@@ -228,33 +228,26 @@ function renderCartUI(){
 async function placeOrder(e){
   e.preventDefault();
   const user = auth.currentUser;
-  if(!user){
-    alert('Please login first');
-    window.location.href='login.html';
-    return false;
+  if(!user){ 
+    alert('Please login first'); 
+    window.location.href='login.html'; 
+    return false; 
   }
 
   const name = (q('#chk-name')||{}).value?.trim();
   const address = (q('#chk-address')||{}).value?.trim();
   const phone = (q('#chk-phone')||{}).value?.trim();
   const payment = (q('#chk-payment')||{}).value || 'COD';
-
-  if(!name || !address || !phone){
-    alert('Complete all fields');
-    return false;
-  }
+  if(!name || !address || !phone){ alert('Complete all fields'); return false; }
 
   const cart = getCart();
   if(!cart.length){ alert('Cart is empty'); return false; }
 
-  try {
-    // Fetch latest product info
+  try{
+    // fetch product data
     const snaps = await Promise.all(cart.map(ci=>productsRef().doc(ci.id).get()));
     const invalid = snaps.filter(s=>!s.exists);
-    if(invalid.length){
-      alert('Some items are no longer available. Refresh cart.');
-      return false;
-    }
+    if(invalid.length){ alert('Some items are no longer available. Refresh cart.'); return false; }
 
     const items = snaps.map((doc, idx)=>({
       productId: doc.id,
@@ -262,8 +255,7 @@ async function placeOrder(e){
       price: doc.data().price,
       qty: cart[idx].qty
     }));
-
-    const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+    const total = items.reduce((sum, i)=>sum + i.price * i.qty, 0);
 
     const orderObj = {
       userId: user.uid,
@@ -277,17 +269,24 @@ async function placeOrder(e){
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    await ordersRef().add(orderObj);
+    // add order
+    const orderRef = await ordersRef().add(orderObj);
 
-    // Clear cart
+    // wait for Firestore to write the serverTimestamp
+    const savedOrder = await orderRef.get();
+    const orderData = savedOrder.data();
+    if(orderData && orderData.createdAt && orderData.createdAt.toDate){
+      orderData.createdAt = orderData.createdAt.toDate(); // convert timestamp to Date
+    } else {
+      orderData.createdAt = new Date();
+    }
+
     saveCart([]);
     renderCartCount();
     toggleCart(false);
     closeCheckout();
 
-    // Redirect to My Orders page
-    alert('Order placed successfully! You will be redirected to My Orders.');
-    window.location.href = 'orders.html';
+    openOrderSummary(`Your order ID is ${orderRef.id}. You can track its status in "My Orders".`);
 
   } catch(err){
     console.error(err);
@@ -295,6 +294,56 @@ async function placeOrder(e){
   }
 
   return false;
+}
+
+
+function initCustomerOrders(){
+  const container = document.getElementById('orders-table');
+  if(!container) return;
+
+  auth.onAuthStateChanged(user => {
+    if(!user){
+      alert('Please login to view your orders');
+      window.location.href = 'login.html';
+      return;
+    }
+
+    ordersRef()
+      .where('userId', '==', user.uid)
+      .orderBy('createdAt', 'desc')
+      .onSnapshot(snapshot => {
+        const orders = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          orders.push({
+            id: doc.id,
+            items: data.items || [],
+            total: data.total || 0,
+            status: data.status || 'Pending',
+            createdAt: data.createdAt ? data.createdAt.toDate() : new Date() // safe fallback
+          });
+        });
+
+        if(!orders.length){
+          container.innerHTML = '<p>You have no orders yet.</p>';
+          return;
+        }
+
+        container.innerHTML = orders.map(o => `
+          <div class="order-card">
+            <div><strong>Order ID:</strong> ${o.id}</div>
+            <div><strong>Date:</strong> ${o.createdAt.toLocaleString()}</div>
+            <div><strong>Total:</strong> ₱${o.total.toLocaleString()}</div>
+            <div><strong>Status:</strong> <span class="order-status">${o.status}</span></div>
+            <div><strong>Items:</strong><br/>${o.items.map(i => `${i.title} ×${i.qty}`).join('<br/>')}</div>
+            <hr/>
+          </div>
+        `).join('');
+      }, err => {
+        console.error('Orders listener error', err);
+        container.innerHTML = '<p>Failed to load orders, please refresh the page.</p>';
+      });
+  });
 }
 
 
@@ -451,4 +500,5 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
