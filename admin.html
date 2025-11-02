@@ -9,7 +9,12 @@
 <body>
   <header class="site-header">
     <div class="container header-inner">
-      <div class="brand"><a href="index.html" class="brand-link"><span class="logo-mark">CT</span><span class="brand-name">CobainTech</span></a></div>
+      <div class="brand">
+        <a href="index.html" class="brand-link">
+          <span class="logo-mark">CT</span>
+          <span class="brand-name">CobainTech</span>
+        </a>
+      </div>
       <nav class="actions">
         <a href="index.html" class="btn ghost">Open Store</a>
         <button class="btn" onclick="logoutUser()">Logout</button>
@@ -44,8 +49,7 @@
           <label>Stock <input id="p-stock" type="number" required min="0" /></label>
           <label>Category <input id="p-category" required /></label>
           <label>Description <textarea id="p-desc" rows="4"></textarea></label>
-          <label>Image <input id="p-image" type="file" accept="image/*" onchange="previewProductImage(event)" /></label>
-          <div id="p-img-preview" style="margin:8px 0;"></div>
+          <label>Image URL <input id="p-image-url" type="text" placeholder="https://example.com/image.jpg" /></label>
           <div class="form-actions">
             <button class="btn primary" type="submit">Save</button>
             <button type="button" class="btn ghost" onclick="hideProductForm()">Cancel</button>
@@ -68,9 +72,79 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
   <script src="firebase-config.js"></script>
   <script src="script.js"></script>
+
+  <script>
+    /* ---------- Admin Orders listener ---------- */
+    function initAdminOrders(){
+      const container = document.getElementById('admin-orders');
+      if(!container) return;
+
+      db.collection('orders').orderBy('createdAt','desc').onSnapshot(snapshot=>{
+        const orders = [];
+        snapshot.forEach(doc=>{
+          orders.push({id: doc.id, ...doc.data()});
+        });
+
+        container.innerHTML = orders.map(o=>`
+          <div class="admin-order">
+            <div><strong>Order ID:</strong> ${o.id}</div>
+            <div><strong>Name:</strong> ${o.userName}</div>
+            <div><strong>Phone:</strong> ${o.phone}</div>
+            <div><strong>Address:</strong> ${o.address}</div>
+            <div><strong>Payment:</strong> ${o.payment}</div>
+            <div><strong>Total:</strong> ₱${o.total.toLocaleString()}</div>
+            <div><strong>Status:</strong> 
+              <select onchange="updateOrderStatus('${o.id}', this.value)">
+                <option ${o.status==='Pending'?'selected':''}>Pending</option>
+                <option ${o.status==='Processing'?'selected':''}>Processing</option>
+                <option ${o.status==='Shipped'?'selected':''}>Shipped</option>
+                <option ${o.status==='Delivered'?'selected':''}>Delivered</option>
+              </select>
+            </div>
+            <div><strong>Items:</strong> ${o.items.map(i=>`${i.title} ×${i.qty}`).join('<br/>')}</div>
+            <hr/>
+          </div>
+        `).join('');
+      });
+    }
+
+    function updateOrderStatus(orderId, status){
+      db.collection('orders').doc(orderId).update({status})
+        .then(()=>console.log(`Order ${orderId} updated to ${status}`))
+        .catch(err=>console.error(err));
+    }
+
+    /* ---------- Admin Product Save ---------- */
+    async function saveProduct(e){
+      e.preventDefault();
+      const id = q('#p-id').value;
+      const title = q('#p-title').value.trim();
+      const price = Number(q('#p-price').value);
+      const stock = Number(q('#p-stock').value);
+      const category = q('#p-category').value.trim();
+      const desc = q('#p-desc').value.trim();
+      const imgUrl = q('#p-image-url').value.trim();
+
+      if(!title || isNaN(price)) return alert('Invalid input');
+
+      const data = {title, price, stock, category, desc};
+      if(imgUrl) data.imgUrl = imgUrl;
+
+      try{
+        if(id) await db.collection('products').doc(id).update(data);
+        else await db.collection('products').add({...data, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
+        hideProductForm();
+      } catch(err){ console.error(err); alert('Failed to save product: '+err.message); }
+    }
+
+    /* ---------- Init admin page ---------- */
+    window.addEventListener('load', ()=>{
+      initAdmin();
+      initAdminOrders();
+    });
+  </script>
 </body>
 </html>
