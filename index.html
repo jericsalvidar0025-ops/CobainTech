@@ -95,6 +95,18 @@
       </div>
     </div>
   </div>
+<!-- Order Summary Modal -->
+<div id="order-summary-modal" class="modal" aria-hidden="true">
+  <div class="modal-inner">
+    <button class="close" onclick="closeOrderSummary()">✕</button>
+    <div class="order-summary-content">
+      <h3>Order Placed Successfully!</h3>
+      <p id="summary-text"></p>
+      <button class="btn primary" onclick="goToOrders()">View My Orders</button>
+      <button class="btn ghost" onclick="closeOrderSummary()">Close</button>
+    </div>
+  </div>
+</div>
 
   <footer class="site-footer">
     <div class="container footer-inner">
@@ -117,4 +129,5 @@
   <script src="script.js"></script>
 </body>
 </html>
+
 
