@@ -140,82 +140,82 @@ function openCheckout(){
 function closeCheckout(){ const m = $('#checkout-modal'); if (m) m.style.display = 'none'; }
 
 /* --------- Checkout -> create order in Firestore --------- */
-async function placeOrder(e){
+async function placeOrder(e) {
   if (e && e.preventDefault) e.preventDefault();
 
   const user = auth.currentUser;
   if (!user) {
-    alert('Please login before placing an order.');
-    window.location.href = 'login.html';
-    return false;
+    alert("Please log in before placing an order.");
+    window.location.href = "login.html";
+    return;
   }
 
-  // collect checkout fields
-  const name = ($('#chk-name') && $('#chk-name').value.trim()) || '';
-  const address = ($('#chk-address') && $('#chk-address').value.trim()) || '';
-  const phone = ($('#chk-phone') && $('#chk-phone').value.trim()) || '';
-  const payment = ($('#chk-payment') && $('#chk-payment').value) || 'Cash on Delivery';
+  const name = document.getElementById("chk-name")?.value.trim();
+  const address = document.getElementById("chk-address")?.value.trim();
+  const phone = document.getElementById("chk-phone")?.value.trim();
+  const payment = document.getElementById("chk-payment")?.value || "Cash on Delivery";
 
   if (!name || !address || !phone) {
-    alert('Please complete shipping information.');
-    return false;
+    alert("Please complete all checkout fields.");
+    return;
   }
 
-  const cart = getCart();
-  if (!cart.length) return alert('Cart is empty.');
+  const cart = JSON.parse(localStorage.getItem("ct_cart_v2") || "[]");
+  if (!cart.length) {
+    alert("Your cart is empty.");
+    return;
+  }
 
   try {
-    // fetch product info for each cart item (to freeze price/title)
-    const snaps = await Promise.all(cart.map(ci => db.collection('products').doc(ci.id).get()));
+    // pull product data for price/title snapshot
     const items = [];
     let total = 0;
-    for (let i=0;i<snaps.length;i++){
-      const doc = snaps[i];
-      if (!doc.exists) continue;
-      const data = doc.data();
-      const qty = Number(cart[i].qty || 1);
-      const price = Number(data.price || 0);
-      items.push({
-        productId: doc.id,
-        title: data.title || 'Unknown',
-        price,
-        qty
-      });
-      total = total + (price * qty);
+
+    for (const c of cart) {
+      const doc = await db.collection("products").doc(c.id).get();
+      if (doc.exists) {
+        const d = doc.data();
+        const qty = Number(c.qty || 1);
+        const price = Number(d.price || 0);
+        items.push({
+          productId: doc.id,
+          title: d.title,
+          price,
+          qty,
+        });
+        total += price * qty;
+      }
     }
 
-    // create order object
-    const orderObj = {
+    if (!items.length) {
+      alert("Cart items no longer exist in database.");
+      return;
+    }
+
+    const order = {
       userId: user.uid,
-      userEmail: user.email || '',
+      userEmail: user.email,
       userName: name,
       phone,
       address,
       payment,
       items,
       total,
-      status: 'Pending',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      status: "Pending",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
 
-    const ref = await db.collection('orders').add(orderObj);
+    await db.collection("orders").add(order);
 
-    // clear cart
-    clearCart();
-    renderCartUI();
-    renderCartCount();
-    closeCheckout();
-    alert('Order placed! Order ID: ' + ref.id);
-
-    // redirect to orders page which listens in realtime
-    window.location.href = 'orders.html';
-    return true;
+    localStorage.removeItem("ct_cart_v2");
+    alert("✅ Order placed successfully!");
+    window.location.href = "orders.html";
   } catch (err) {
-    console.error('placeOrder error', err);
-    alert('Failed to place order: ' + (err.message || err));
-    return false;
+    console.error("placeOrder error", err);
+    alert("⚠️ Failed to place order: " + err.message);
   }
 }
+
 
 /* --------- Orders: customer page realtime listener + render --------- */
 function initCustomerOrdersListener(){
@@ -491,3 +491,4 @@ window.addEventListener('load', () => {
 
 /* expose small helper to render cart count externally */
 window.renderCartCount = renderCartCount;
+
