@@ -1,12 +1,4 @@
-/* script.js — CobainTech Firebase edition
-   Requires: firebase (compat), firebase-config.js (which initializes auth, db, storage)
-   Features:
-   - Signup/Login (creates users/{uid} doc)
-   - Products: realtime list (products collection)
-   - Admin: add/edit/delete products (upload images to Storage)
-   - Cart: stored in localStorage, checkout creates orders in Firestore
-   - Orders: customers view their orders; admin manages orders
-*/
+/* script.js — CobainTech Firebase edition (merged & fixed) */
 
 /* ---------- helpers ---------- */
 function q(sel){ return document.querySelector(sel); }
@@ -273,8 +265,8 @@ async function placeOrder(e){
   return false;
 }
 
-function openCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='flex'; }
-function closeCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='none'; }
+function openCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='flex'; modal.setAttribute('aria-hidden','false'); }
+function closeCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='none'; modal.setAttribute('aria-hidden','true'); }
 
 /* ---------- Orders page ---------- */
 function initOrdersPage(){
