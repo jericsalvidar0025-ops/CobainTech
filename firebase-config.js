@@ -1,4 +1,4 @@
-// firebase-config.js — fixed for compat SDK
+// firebase-config.js — fixed for compat SDK and global access
 
 // Initialize Firebase using compat syntax (no import)
 const firebaseConfig = {
@@ -18,3 +18,13 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
+
+// Expose globally so other scripts can access
+window.auth = auth;
+window.db = db;
+window.storage = storage;
+
+// Helper to get collection references globally
+window.productsRef = () => db.collection('products');
+window.ordersRef = () => db.collection('orders');
+window.usersRef = () => db.collection('users');
