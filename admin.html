@@ -68,9 +68,19 @@ label { display:block; margin-bottom:6px; font-weight:600; }
   <div class="brand">CobainTech Admin</div>
   <div class="header-actions">
     <span id="welcome-user-top"></span>
+
+    <!-- Store button with icon -->
+    <button onclick="window.open('index.html','_blank')" style="display:flex;align-items:center;gap:6px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M2 2v1h12V2H2zm0 2h12v10H2V4zm1 1v8h10V5H3z"/>
+      </svg>
+      Store
+    </button>
+
     <button onclick="logoutUser()">Logout</button>
   </div>
 </header>
+
 
 <div class="container">
   <nav class="sidebar">
@@ -239,3 +249,4 @@ window.addEventListener('load',()=>{
 
 </body>
 </html>
+
