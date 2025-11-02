@@ -1,4 +1,4 @@
-/* script.js — CobainTech Firebase edition (merged & fixed) */
+/* script.js — CobainTech Firebase edition (updated full) */
 
 /* ---------- helpers ---------- */
 function q(sel){ return document.querySelector(sel); }
@@ -14,7 +14,7 @@ function placeholderDataURL(text){
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); 
 }
 
-/* ---------- Firestore refs (compat style) ---------- */
+/* ---------- Firestore refs ---------- */
 const productsRef = () => db.collection('products');
 const ordersRef = () => db.collection('orders');
 const usersRef = () => db.collection('users');
@@ -25,7 +25,7 @@ window.addEventListener('load', () => {
   bindAuthState();
   initIndex();
   initAdmin();
-  initOrdersPage();
+  initCustomerOrders(); // Customer orders listener
 });
 
 /* ---------- Auth: signup/login/logout ---------- */
@@ -90,7 +90,7 @@ function bindAuthState(){
   });
 }
 
-/* ---------- INDEX PAGE: products listing (realtime) ---------- */
+/* ---------- INDEX PAGE: products listing ---------- */
 let lastProducts = [];
 function initIndex(){
   if (!q('#catalog')) return;
@@ -244,7 +244,6 @@ async function placeOrder(e){
   if(!cart.length){ alert('Cart is empty'); return false; }
 
   try{
-    // fetch product data
     const snaps = await Promise.all(cart.map(ci=>productsRef().doc(ci.id).get()));
     const invalid = snaps.filter(s=>!s.exists);
     if(invalid.length){ alert('Some items are no longer available. Refresh cart.'); return false; }
@@ -269,17 +268,7 @@ async function placeOrder(e){
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    // add order
     const orderRef = await ordersRef().add(orderObj);
-
-    // wait for Firestore to write the serverTimestamp
-    const savedOrder = await orderRef.get();
-    const orderData = savedOrder.data();
-    if(orderData && orderData.createdAt && orderData.createdAt.toDate){
-      orderData.createdAt = orderData.createdAt.toDate(); // convert timestamp to Date
-    } else {
-      orderData.createdAt = new Date();
-    }
 
     saveCart([]);
     renderCartCount();
@@ -296,9 +285,12 @@ async function placeOrder(e){
   return false;
 }
 
+function openCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='flex'; modal.setAttribute('aria-hidden','false'); }
+function closeCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='none'; modal.setAttribute('aria-hidden','true'); }
 
+/* ---------- Customer Orders ---------- */
 function initCustomerOrders(){
-  const container = document.getElementById('orders-table');
+  const container = q('#orders-table');
   if(!container) return;
 
   auth.onAuthStateChanged(user => {
@@ -320,7 +312,7 @@ function initCustomerOrders(){
             items: data.items || [],
             total: data.total || 0,
             status: data.status || 'Pending',
-            createdAt: data.createdAt ? data.createdAt.toDate() : new Date() // safe fallback
+            createdAt: data.createdAt ? data.createdAt.toDate() : new Date()
           });
         });
 
@@ -346,28 +338,6 @@ function initCustomerOrders(){
   });
 }
 
-
-function openCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='flex'; modal.setAttribute('aria-hidden','false'); }
-function closeCheckout(){ const modal = q('#checkout-modal'); if(modal) modal.style.display='none'; modal.setAttribute('aria-hidden','true'); }
-
-/* ---------- Orders page ---------- */
-function initOrdersPage(){
-  const table = q('#orders-table'); if(!table) return;
-  const user = auth.currentUser;
-  if(!user) return;
-  ordersRef().where('userId','==',user.uid).orderBy('createdAt','desc').onSnapshot(snap=>{
-    const arr=[]; snap.forEach(d=>arr.push({id:d.id,...d.data()}));
-    table.innerHTML = arr.map(o=>`
-      <tr>
-        <td>${o.id}</td>
-        <td>${escapeHtml(o.userName)}</td>
-        <td>${o.items.map(i=>escapeHtml(i.title)+' ×'+i.qty).join('<br/>')}</td>
-        <td>${money(o.total)}</td>
-        <td>${escapeHtml(o.status)}</td>
-      </tr>
-    `).join('');
-  });
-}
 function openOrderSummary(text){
   const modal = q('#order-summary-modal');
   if(modal){
@@ -385,7 +355,7 @@ function closeOrderSummary(){
 }
 function goToOrders(){ window.location.href='orders.html'; }
 
-/* ---------- Admin helpers (add/edit/delete products & manage orders) ---------- */
+/* ---------- Admin ---------- */
 let adminProducts=[];
 function initAdmin(){
   if(!q('#admin-product-list')) return;
@@ -396,7 +366,7 @@ function initAdmin(){
   });
 
   renderAdminProducts();
-  initAdminOrders(); // load orders table
+  initAdminOrders(); // load admin orders table
 }
 
 function renderAdminProducts(){
@@ -420,7 +390,6 @@ function renderAdminProducts(){
 function showAddProduct(){ q('#product-form-area').style.display='block'; q('#product-form-title').textContent='Add Product'; q('#product-form').reset(); q('#p-id').value=''; }
 function hideProductForm(){ q('#product-form-area').style.display='none'; }
 
-/* ---------- Admin: Add/Edit Products ---------- */
 async function saveProduct(e){
   e.preventDefault();
   const id = q('#p-id').value;
@@ -500,5 +469,3 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
-
-
