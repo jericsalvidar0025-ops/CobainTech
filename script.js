@@ -6,7 +6,13 @@ function qAll(sel){ return document.querySelectorAll(sel); }
 function money(v){ return `₱${Number(v).toLocaleString()}`; }
 function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 function debounce(fn,d=200){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),d); }; }
-function placeholderDataURL(text){ const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='700'><rect fill='#0b0c0e' width='100%' height='100%'/><text x='50%' y='50%' font-size='48' font-family='Segoe UI, Roboto' fill='#fff' text-anchor='middle' alignment-baseline='middle'>${escapeHtml(text)}</text></svg>`; return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); }
+function placeholderDataURL(text){ 
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='700'>
+    <rect fill='#0b0c0e' width='100%' height='100%'/>
+    <text x='50%' y='50%' font-size='48' font-family='Segoe UI, Roboto' fill='#fff' text-anchor='middle' alignment-baseline='middle'>${escapeHtml(text)}</text>
+  </svg>`; 
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); 
+}
 
 /* ---------- Firestore refs (compat style) ---------- */
 const productsRef = () => db.collection('products');
@@ -54,9 +60,7 @@ async function loginUser(e){
   return false;
 }
 
-function logoutUser(){
-  auth.signOut();
-}
+function logoutUser(){ auth.signOut(); }
 
 /* ---------- auth state & UI ---------- */
 function bindAuthState(){
@@ -259,7 +263,7 @@ async function placeOrder(e){
     renderCartCount();
     toggleCart(false);
     closeCheckout();
-   openOrderSummary(`Your order ID is ${orderRef.id}. You can track its status in "My Orders".`);
+    openOrderSummary(`Your order ID is ${orderRef.id}. You can track its status in "My Orders".`);
   }catch(err){ console.error(err); alert('Checkout failed: '+(err.message||err)); }
   return false;
 }
@@ -293,7 +297,6 @@ function openOrderSummary(text){
     modal.setAttribute('aria-hidden','false');
   }
 }
-
 function closeOrderSummary(){
   const modal = q('#order-summary-modal');
   if(modal){
@@ -301,14 +304,10 @@ function closeOrderSummary(){
     modal.setAttribute('aria-hidden','true');
   }
 }
+function goToOrders(){ window.location.href='orders.html'; }
 
-function goToOrders(){
-  window.location.href='orders.html';
-}
-
-/* ---------- Admin helpers (add/edit/delete products) ---------- */
+/* ---------- Admin helpers (add/edit/delete products & manage orders) ---------- */
 let adminProducts=[];
-
 function initAdmin(){
   if(!q('#admin-product-list')) return;
 
@@ -318,6 +317,7 @@ function initAdmin(){
   });
 
   renderAdminProducts();
+  initAdminOrders(); // load orders table
 }
 
 function renderAdminProducts(){
@@ -340,6 +340,8 @@ function renderAdminProducts(){
 
 function showAddProduct(){ q('#product-form-area').style.display='block'; q('#product-form-title').textContent='Add Product'; q('#product-form').reset(); q('#p-id').value=''; }
 function hideProductForm(){ q('#product-form-area').style.display='none'; }
+
+/* ---------- Admin: Add/Edit Products ---------- */
 async function saveProduct(e){
   e.preventDefault();
   const id = q('#p-id').value;
@@ -348,20 +350,17 @@ async function saveProduct(e){
   const stock = Number(q('#p-stock').value);
   const category = q('#p-category').value.trim();
   const desc = q('#p-desc').value.trim();
-  const file = q('#p-image').files[0];
-  if(!title||isNaN(price)) return alert('Invalid input');
+  const imgUrl = (q('#p-image-url')||{}).value.trim();
+  if(!title || isNaN(price)) return alert('Invalid input');
   try{
-    let imgUrl='';
-    if(file){
-      const ref = storage.ref().child('products/'+Date.now()+'_'+file.name);
-      await ref.put(file);
-      imgUrl = await ref.getDownloadURL();
-    }
-    const data={title,price,stock,category,desc}; if(imgUrl) data.imgUrl=imgUrl;
-    if(id) await productsRef().doc(id).update(data); else await productsRef().add({...data, createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    const data = {title, price, stock, category, desc};
+    if(imgUrl) data.imgUrl = imgUrl;
+    if(id) await productsRef().doc(id).update(data);
+    else await productsRef().add({...data, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
     hideProductForm();
   }catch(err){ console.error(err); alert('Failed to save product: '+(err.message||err)); }
 }
+
 async function editProduct(id){
   const doc = await productsRef().doc(id).get();
   if(!doc.exists) return alert('Product not found');
@@ -372,12 +371,53 @@ async function editProduct(id){
   q('#p-stock').value=p.stock||0;
   q('#p-category').value=p.category;
   q('#p-desc').value=p.desc||'';
+  q('#p-image-url').value=p.imgUrl||'';
   q('#product-form-area').style.display='block';
   q('#product-form-title').textContent='Edit Product';
 }
+
 async function deleteProduct(id){ if(!confirm('Delete this product?')) return; try{ await productsRef().doc(id).delete(); } catch(err){ console.error(err); alert('Delete failed'); } }
+
+/* ---------- Admin Orders Management ---------- */
+function initAdminOrders(){
+  const tbody = q('#admin-orders'); if(!tbody) return;
+  ordersRef().orderBy('createdAt','desc').onSnapshot(snapshot=>{
+    const rows = [];
+    snapshot.forEach(doc=>{
+      const o = {id: doc.id, ...doc.data()};
+      const items = o.items.map(i=>`${i.title} ×${i.qty}`).join('<br>');
+      const statusColor = {
+        'Pending':'orange',
+        'Processing':'blue',
+        'Shipped':'purple',
+        'Delivered':'green'
+      }[o.status] || 'gray';
+      rows.push(`
+        <tr>
+          <td>${o.id}</td>
+          <td>${escapeHtml(o.userName)}</td>
+          <td>${items}</td>
+          <td>${money(o.total)}</td>
+          <td style="color:${statusColor};font-weight:bold">${o.status}</td>
+          <td>
+            ${o.status!=='Delivered'?`<button class="btn small" onclick="advanceOrder('${o.id}')">Next Stage</button>`:''}
+          </td>
+        </tr>
+      `);
+    });
+    tbody.innerHTML = rows.join('');
+  });
+}
+
+async function advanceOrder(id){
+  const doc = await ordersRef().doc(id).get();
+  if(!doc.exists) return alert('Order not found');
+  const statusFlow = ['Pending','Processing','Shipped','Delivered'];
+  const current = doc.data().status;
+  const next = statusFlow[statusFlow.indexOf(current)+1];
+  if(!next) return;
+  await ordersRef().doc(id).update({status: next});
+}
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
-
-
