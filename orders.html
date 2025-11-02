@@ -52,7 +52,7 @@
   </main>
 
   <footer class="site-footer container">
-    <div>© <span id="year"></span> CobainTech</div>
+    <div>© <span id="year">{year}</span> CobainTech</div>
   </footer>
 
   <!-- Firebase SDKs -->
@@ -60,45 +60,59 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
+  <!-- Firebase config -->
   <script src="firebase-config.js"></script>
+
+  <!-- Main script -->
   <script src="script.js"></script>
 
   <script>
-    function setFooterYear(){ document.getElementById('year').textContent = new Date().getFullYear(); }
+    // Set footer year
+    function setFooterYear(){ 
+      document.getElementById('year').textContent = new Date().getFullYear(); 
+    }
 
-    // Show orders for logged-in customer
-    function initCustomerOrders(){
+    // Initialize customer orders (uses updated script.js function)
+    function initCustomerOrdersPage(){
       const container = document.getElementById('orders-table');
       if(!container) return;
 
-      auth.onAuthStateChanged(user=>{
+      auth.onAuthStateChanged(user => {
         if(!user){
           alert('Please login to view your orders');
           window.location.href = 'login.html';
           return;
         }
 
-        db.collection('orders')
-          .where('userId','==', user.uid)
-          .orderBy('createdAt','desc')
-          .onSnapshot(snapshot=>{
-            const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        ordersRef()
+          .where('userId', '==', user.uid)
+          .orderBy('createdAt', 'desc')
+          .onSnapshot(snapshot => {
+            const orders = snapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                items: data.items || [],
+                total: data.total || 0,
+                status: data.status || 'Pending',
+                createdAt: data.createdAt ? data.createdAt.toDate() : new Date()
+              };
+            });
 
             if(!orders.length){
               container.innerHTML = '<p>You have no orders yet.</p>';
               return;
             }
 
-            container.innerHTML = orders.map(o=>{
-              const date = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : '—';
-              const itemsHTML = (o.items || []).map(i=>`${i.title} ×${i.qty}`).join('<br/>');
-              const statusClass = `status-${o.status || 'Pending'}`;
+            container.innerHTML = orders.map(o => {
+              const itemsHTML = o.items.map(i => `${i.title} ×${i.qty}`).join('<br/>');
+              const statusClass = `status-${o.status}`;
               return `
                 <div class="order-card">
                   <div><strong>Order ID:</strong> ${o.id}</div>
-                  <div><strong>Date:</strong> ${date}</div>
-                  <div><strong>Total:</strong> ₱${(o.total || 0).toLocaleString()}</div>
-                  <div><strong>Status:</strong> <span class="order-status ${statusClass}">${o.status || 'Pending'}</span></div>
+                  <div><strong>Date:</strong> ${o.createdAt.toLocaleString()}</div>
+                  <div><strong>Total:</strong> ₱${o.total.toLocaleString()}</div>
+                  <div><strong>Status:</strong> <span class="order-status ${statusClass}">${o.status}</span></div>
                   <div><strong>Items:</strong><br/>${itemsHTML}</div>
                 </div>
               `;
@@ -110,10 +124,11 @@
       });
     }
 
-    window.addEventListener('load', ()=>{
+    // Initialize page on load
+    window.addEventListener('load', () => {
       setFooterYear();
-      bindAuthState();
-      initCustomerOrders();
+      bindAuthState();       // From script.js
+      initCustomerOrdersPage(); // Load orders
     });
   </script>
 </body>
