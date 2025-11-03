@@ -66,20 +66,47 @@ label { display:block; margin-bottom:6px; font-weight:600; }
 
 <header>
   <div class="brand">CobainTech Admin</div>
-  <div class="header-actions">
-    <span id="welcome-user-top"></span>
+  <div class="header-actions" style="display:flex;align-items:center;gap:10px;">
+    <span id="welcome-user-top" style="margin-right:10px;"></span>
 
-    <!-- Store button with icon -->
-    <button onclick="window.open('index.html','_blank')" style="display:flex;align-items:center;gap:6px;">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-        <path d="M2 2v1h12V2H2zm0 2h12v10H2V4zm1 1v8h10V5H3z"/>
-      </svg>
-      Store
+    <!-- Store Button -->
+    <button onclick="window.open('index.html','_blank')" class="btn-store">
+      🏬 Store
     </button>
 
-    <button onclick="logoutUser()">Logout</button>
+    <!-- Logout Button -->
+    <button onclick="logoutUser()" class="btn-logout">
+      🔒 Logout
+    </button>
   </div>
 </header>
+
+<style>
+.btn-store, .btn-logout {
+  background: #3498db;
+  border: none;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.btn-store:hover { background: #2980b9; }
+.btn-logout {
+  background: #e74c3c;
+}
+.btn-logout:hover {
+  background: #c0392b;
+}
+</style>
+
+<script>
+function logoutUser(){
+  firebase.auth().signOut().then(()=>{
+    window.location.href = "index.html"; // redirects to your main store page
+  });
+}
+</script>
 
 
 <div class="container">
@@ -249,4 +276,5 @@ window.addEventListener('load',()=>{
 
 </body>
 </html>
+
 
