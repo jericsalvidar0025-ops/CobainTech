@@ -101,11 +101,26 @@ label { display:block; margin-bottom:6px; font-weight:600; }
 </style>
 
 <script>
-function logoutUser(){
-  firebase.auth().signOut().then(()=>{
-    window.location.href = "index.html"; // redirects to your main store page
-  });
-}
+// Wait until Firebase is fully loaded
+window.addEventListener('load', () => {
+  // Redefine logout function after Firebase initializes
+  window.logoutUser = function() {
+    if (firebase && firebase.auth) {
+      firebase.auth().signOut()
+        .then(() => {
+          console.log('User signed out successfully.');
+          window.location.href = "index.html"; // redirect to store main page
+        })
+        .catch((error) => {
+          console.error("Logout failed:", error);
+          alert("Logout failed. Check console for details.");
+        });
+    } else {
+      console.error("Firebase not loaded yet.");
+      alert("Please wait a few seconds and try again.");
+    }
+  };
+});
 </script>
 
 
@@ -276,5 +291,6 @@ window.addEventListener('load',()=>{
 
 </body>
 </html>
+
 
 
