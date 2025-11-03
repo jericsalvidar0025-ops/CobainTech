@@ -129,6 +129,7 @@ window.addEventListener('load', () => {
     <button class="active" onclick="showTab('products')">Products</button>
     <button onclick="showTab('orders')">Orders</button>
     <button onclick="showTab('sales')">Sales</button>
+    <button onclick="showTab('settings')">Settings</button>
   </nav>
 
   <main class="content">
@@ -194,7 +195,27 @@ window.addEventListener('load', () => {
         <canvas id="salesChart" height="250"></canvas>
       </div>
     </section>
-
+<!-- Settings Tab -->
+<section id="tab-settings" style="display:none">
+  <div class="card">
+    <h3>Store Settings</h3>
+    <form id="settings-form" onsubmit="saveSettings(event)">
+      <label>Store Name
+        <input id="store-name" placeholder="CobainTech">
+      </label>
+      <label>Store Logo URL
+        <input id="store-logo" placeholder="https://example.com/logo.png">
+      </label>
+      <label>Contact Email
+        <input id="store-email" placeholder="support@cobaintech.com">
+      </label>
+      <label>Contact Phone
+        <input id="store-phone" placeholder="+63 900 000 0000">
+      </label>
+      <button type="submit" class="btn primary">Save Settings</button>
+    </form>
+  </div>
+</section>
   </main>
 </div>
 
@@ -288,9 +309,53 @@ window.addEventListener('load',()=>{
   });
 });
 </script>
+<script>
+// ---------- SETTINGS ----------
+function loadSettings() {
+  db.collection('settings').doc('store').get().then(doc => {
+    if (doc.exists) {
+      const s = doc.data();
+      document.getElementById('store-name').value = s.name || '';
+      document.getElementById('store-logo').value = s.logo || '';
+      document.getElementById('store-email').value = s.email || '';
+      document.getElementById('store-phone').value = s.phone || '';
+    }
+  }).catch(err => console.error('Error loading settings:', err));
+}
 
+function saveSettings(e) {
+  e.preventDefault();
+  const name = document.getElementById('store-name').value;
+  const logo = document.getElementById('store-logo').value;
+  const email = document.getElementById('store-email').value;
+  const phone = document.getElementById('store-phone').value;
+
+  db.collection('settings').doc('store').set({
+    name, logo, email, phone, updatedAt: new Date()
+  }).then(() => {
+    alert('Settings saved successfully!');
+  }).catch(err => {
+    console.error('Error saving settings:', err);
+    alert('Failed to save settings.');
+  });
+}
+
+// Auto-load when Settings tab is opened
+function showTab(tab){
+  ['products','orders','sales','settings'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display=(t===tab)?'block':'none';
+    document.querySelectorAll('.sidebar button').forEach(btn=>{
+      if(btn.textContent.toLowerCase()===t)
+        btn.classList.toggle('active', t===tab);
+    });
+  });
+
+  if(tab==='settings') loadSettings();
+}
+</script>
 </body>
 </html>
+
 
 
 
