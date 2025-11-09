@@ -313,6 +313,11 @@ window.addEventListener('load',()=>{
   renderAdminProducts();
   renderSalesChart();
 
+  // ✅ Initialize chat listener (admin side)
+  initChat();
+});
+
+
   // Sales metrics
   ordersRef().onSnapshot(snapshot=>{
     let totalRevenue=0;
@@ -368,6 +373,7 @@ function showTab(tab){
 </script>
 </body>
 </html>
+
 
 
 
