@@ -39,12 +39,17 @@ window.addEventListener('load', () => {
 
 /* ---------- Chat system (Customer & Admin) ---------- */
 
+/* ---------------- Firebase Init ---------------- */
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+/* ---------------- Global Vars ---------------- */
 let customerChatUnsub = null;
 let adminUsersUnsub = null;
 let adminMessagesUnsub = null;
 let currentAdminChatUser = null;
 
-/* ---------------- Customer chat ---------------- */
+/* ---------------- Init ---------------- */
 function initChat() {
   auth.onAuthStateChanged(user => {
     // Customer view
@@ -58,7 +63,7 @@ function initChat() {
     if (document.getElementById("chat-users")) loadChatUsersRealtime();
   });
 
-  // Customer chat toggle button
+  // Customer chat toggle
   const chatToggle = document.getElementById('chat-toggle-btn');
   if (chatToggle) chatToggle.addEventListener('click', toggleChatBox);
 
@@ -75,8 +80,23 @@ function initChat() {
       }
     });
   }
+
+  // Admin send button & Enter key
+  const adminSendBtn = document.getElementById('admin-send-btn');
+  if (adminSendBtn) adminSendBtn.addEventListener('click', adminSendChat);
+
+  const adminInputEl = document.getElementById('admin-chat-input');
+  if (adminInputEl) {
+    adminInputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        adminSendChat();
+      }
+    });
+  }
 }
 
+/* ---------------- Customer Chat ---------------- */
 function toggleChatBox() {
   const box = document.getElementById("chat-box");
   if (!box) return;
@@ -88,10 +108,9 @@ function startCustomerChat(userId) {
   const box = document.getElementById("chat-messages");
   if (!box) return;
 
-  const colRef = db.collection('chats').doc(userId).collection('messages');
-  const qSnap = colRef.orderBy('timestamp', 'asc');
+  const colRef = db.collection('chats').doc(userId).collection('messages').orderBy('timestamp','asc');
 
-  customerChatUnsub = qSnap.onSnapshot(snapshot => {
+  customerChatUnsub = colRef.onSnapshot(snapshot => {
     box.innerHTML = '';
     if (snapshot.empty) {
       box.innerHTML = `<div style="padding:12px;color:#ddd">No messages yet. Say hi 👋</div>`;
@@ -152,7 +171,7 @@ function sendChat() {
   .catch(err => console.error('Failed to send chat:', err));
 }
 
-/* ---------------- Admin chat ---------------- */
+/* ---------------- Admin Chat ---------------- */
 function loadChatUsersRealtime() {
   const listEl = document.getElementById('chat-users');
   if (!listEl) return;
@@ -186,12 +205,11 @@ function openAdminChat(userId) {
 
   if (adminMessagesUnsub) try { adminMessagesUnsub(); } catch(e){ }
 
-  const colRef = db.collection('chats').doc(userId).collection('messages');
-  const qSnap = colRef.orderBy('timestamp','asc');
+  const colRef = db.collection('chats').doc(userId).collection('messages').orderBy('timestamp','asc');
   const messagesBox = document.getElementById('chat-admin-messages');
   if (!messagesBox) return;
 
-  adminMessagesUnsub = qSnap.onSnapshot(snapshot => {
+  adminMessagesUnsub = colRef.onSnapshot(snapshot => {
     messagesBox.innerHTML = '';
     if (snapshot.empty) {
       messagesBox.innerHTML = '<div style="padding:8px;color:#ddd">No messages yet.</div>';
@@ -245,6 +263,8 @@ function adminSendChat() {
   .catch(err => console.error('Failed to send admin message', err));
 }
 
+/* ---------------- Initialize ---------------- */
+document.addEventListener('DOMContentLoaded', initChat);
 
 
 /* ---------- Auth: signup/login/logout ---------- */
@@ -719,6 +739,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
