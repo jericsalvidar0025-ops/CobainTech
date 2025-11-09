@@ -25,6 +25,7 @@ window.addEventListener('load', () => {
   bindAuthState();
   initIndex();
   initAdmin();
+  initChat();
   initCustomerOrders(); // Customer orders listener
 });
 
@@ -88,6 +89,113 @@ function bindAuthState(){
       if (adminLink) adminLink.style.display = 'none';
     }
   });
+}
+function toggleChatBox() {
+  const box = document.getElementById("chat-box");
+  box.style.display = box.style.display === "none" ? "flex" : "none";
+}
+
+function sendChat() {
+  const input = document.getElementById("chat-input");
+  const message = input.value.trim();
+  if (!message) return;
+
+  const user = auth.currentUser;
+  if (!user) return alert("Please log in to chat.");
+
+  db.collection("chats")
+    .doc(user.uid)
+    .collection("messages")
+    .add({
+      sender: "customer",
+      message: message,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+
+  input.value = "";
+}
+
+function listenChat() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection("chats")
+    .doc(user.uid)
+    .collection("messages")
+    .orderBy("timestamp", "asc")
+    .onSnapshot(snapshot => {
+      const box = document.getElementById("chat-messages");
+      box.innerHTML = "";
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        box.innerHTML += `
+          <div style="margin-bottom:8px;text-align:${data.sender === "customer" ? "right" : "left"}">
+            <span style="background:${data.sender === "customer" ? "#3498db" : "#444"};padding:6px 12px;border-radius:6px;display:inline-block;">
+              ${data.message}
+            </span>
+          </div>
+        `;
+      });
+      box.scrollTop = box.scrollHeight;
+    });
+}
+
+auth.onAuthStateChanged(user => {
+  if (user) listenChat();
+});
+function initChat() {
+  db.collection("chats").onSnapshot(snapshot => {
+    let list = "";
+    snapshot.forEach(doc => {
+      list += `<button onclick="openAdminChat('${doc.id}')">${doc.id}</button><br>`;
+    });
+    document.getElementById("chat-users").innerHTML = list;
+  });
+}
+
+function openAdminChat(userId) {
+  document.getElementById("chat-admin-box").style.display = "block";
+  document.getElementById("chat-with").textContent = "Chat with: " + userId;
+
+  db.collection("chats")
+    .doc(userId)
+    .collection("messages")
+    .orderBy("timestamp")
+    .onSnapshot(snapshot => {
+      const box = document.getElementById("chat-admin-messages");
+      box.innerHTML = "";
+
+      snapshot.forEach(doc => {
+        const msg = doc.data();
+        const isAdmin = msg.sender === "admin";
+
+        box.innerHTML += `
+          <div style="text-align:${isAdmin ? "right" : "left"};">
+            <p style="background:${isAdmin ? "#3498db" : "#444"}; display:inline-block; padding:6px 12px; border-radius:10px;">
+              ${msg.message}
+            </p>
+          </div>
+        `;
+      });
+
+      box.scrollTop = box.scrollHeight;
+    });
+}
+
+function adminSendChat() {
+  const msg = document.getElementById("admin-chat-input").value;
+  const userId = document.getElementById("chat-with").textContent.replace("Chat with: ", "");
+
+  db.collection("chats")
+    .doc(userId)
+    .collection("messages")
+    .add({
+      sender: "admin",
+      message: msg,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+  document.getElementById("admin-chat-input").value = "";
 }
 
 /* ---------- INDEX PAGE: products listing ---------- */
@@ -496,6 +604,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
