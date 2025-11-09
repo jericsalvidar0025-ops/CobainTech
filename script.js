@@ -1,26 +1,16 @@
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-<!-- Your config -->
-<script src="firebase-config.js"></script>
-
-<!-- Your main JS -->
-<script src="script.js"></script>
-
 /* script.js — CobainTech Firebase edition (updated full) */
 
 /* ---------- helpers ---------- */
 function q(sel){ return document.querySelector(sel); }
 function qAll(sel){ return document.querySelectorAll(sel); }
-function money(v){ return ₱${Number(v).toLocaleString()}; }
+function money(v){ return `₱${Number(v).toLocaleString()}`; }
 function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 function debounce(fn,d=200){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),d); }; }
 function placeholderDataURL(text){ 
-  const svg = <svg xmlns='http://www.w3.org/2000/svg' width='1200' height='700'>
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='700'>
     <rect fill='#0b0c0e' width='100%' height='100%'/>
     <text x='50%' y='50%' font-size='48' font-family='Segoe UI, Roboto' fill='#fff' text-anchor='middle' alignment-baseline='middle'>${escapeHtml(text)}</text>
-  </svg>; 
+  </svg>`; 
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); 
 }
 
@@ -62,7 +52,7 @@ function initChat() {
       } else {
         // ensure chat messages area is empty / show prompt
         const box = document.getElementById("chat-messages");
-        if (box) box.innerHTML = <div style="padding:12px;color:#ddd">Please login to chat with us.</div>;
+        if (box) box.innerHTML = `<div style="padding:12px;color:#ddd">Please login to chat with us.</div>`;
       }
     }
 
@@ -167,7 +157,7 @@ function listenToCustomerMessages(userId) {
   if (!box) return;
 
   // ensure UI cleared then listen
-  box.innerHTML = <div style="padding:12px;color:#ddd">Loading messages…</div>;
+  box.innerHTML = `<div style="padding:12px;color:#ddd">Loading messages…</div>`;
 
   const colRef = db.collection('chats').doc(userId).collection('messages');
   const q = colRef.orderBy('timestamp', 'asc');
@@ -175,7 +165,7 @@ function listenToCustomerMessages(userId) {
   customerChatUnsub = q.onSnapshot(snapshot => {
     // If no docs, show initial message
     if (snapshot.empty) {
-      box.innerHTML = <div style="padding:12px;color:#ddd">No messages yet. Say hi 👋</div>;
+      box.innerHTML = `<div style="padding:12px;color:#ddd">No messages yet. Say hi 👋</div>`;
       return;
     }
 
@@ -212,7 +202,7 @@ function listenToCustomerMessages(userId) {
     box.scrollTop = box.scrollHeight;
   }, err => {
     console.error('Customer chat listener error', err);
-    box.innerHTML = <div style="padding:12px;color:#f66">Failed to load messages.</div>;
+    box.innerHTML = `<div style="padding:12px;color:#f66">Failed to load messages.</div>`;
   });
 }
 
@@ -244,12 +234,12 @@ function loadChatUsersRealtime() {
     const html = [];
     snapshot.forEach(doc => {
       const uid = doc.id;
-      html.push(<button class="btn small" style="margin-bottom:6px;display:block;width:100%;text-align:left" onclick="openAdminChat('${uid}')">User: ${uid}</button>);
+      html.push(`<button class="btn small" style="margin-bottom:6px;display:block;width:100%;text-align:left" onclick="openAdminChat('${uid}')">User: ${uid}</button>`);
     });
     listEl.innerHTML = html.join('');
   }, err => {
     console.error('Failed to load chat users', err);
-    listEl.innerHTML = <div style="padding:8px;color:#f66">Failed to load users.</div>;
+    listEl.innerHTML = `<div style="padding:8px;color:#f66">Failed to load users.</div>`;
   });
 }
 
@@ -260,7 +250,7 @@ function openAdminChat(userId) {
   const boxWrap = document.getElementById('chat-admin-box');
   if (boxWrap) boxWrap.style.display = 'block';
   const withEl = document.getElementById('chat-with');
-  if (withEl) withEl.textContent = Chat with: ${userId};
+  if (withEl) withEl.textContent = `Chat with: ${userId}`;
 
   // attach the message listener
   listenAdminMessages(userId);
@@ -397,7 +387,7 @@ function bindAuthState(){
       try {
         const doc = await usersRef().doc(user.uid).get();
         const username = doc.exists ? (doc.data().username || user.email.split('@')[0]) : user.email.split('@')[0];
-        if (welcome) welcome.textContent = Hi, ${username};
+        if (welcome) welcome.textContent = `Hi, ${username}`;
         if (loginLink) loginLink.style.display = 'none';
         if (signupLink) signupLink.style.display = 'none';
         if (doc.exists && doc.data().role === 'admin') {
@@ -431,13 +421,13 @@ function listenChat() {
       box.innerHTML = "";
       snapshot.forEach(doc => {
         const data = doc.data();
-        box.innerHTML += 
+        box.innerHTML += `
           <div style="margin-bottom:8px;text-align:${data.sender === "customer" ? "right" : "left"}">
             <span style="background:${data.sender === "customer" ? "#3498db" : "#444"};padding:6px 12px;border-radius:6px;display:inline-block;">
               ${data.message}
             </span>
           </div>
-        ;
+        `;
       });
       box.scrollTop = box.scrollHeight;
     });
@@ -450,7 +440,7 @@ function initChat() {
   db.collection("chats").onSnapshot(snapshot => {
     let list = "";
     snapshot.forEach(doc => {
-      list += <button onclick="openAdminChat('${doc.id}')">${doc.id}</button><br>;
+      list += `<button onclick="openAdminChat('${doc.id}')">${doc.id}</button><br>`;
     });
     document.getElementById("chat-users").innerHTML = list;
   });
@@ -472,13 +462,13 @@ function openAdminChat(userId) {
         const msg = doc.data();
         const isAdmin = msg.sender === "admin";
 
-        box.innerHTML += 
+        box.innerHTML += `
           <div style="text-align:${isAdmin ? "right" : "left"};">
             <p style="background:${isAdmin ? "#3498db" : "#444"}; display:inline-block; padding:6px 12px; border-radius:10px;">
               ${msg.message}
             </p>
           </div>
-        ;
+        `;
       });
 
       box.scrollTop = box.scrollHeight;
@@ -525,7 +515,7 @@ function initIndex(){
 
 function renderProducts(list){
   const container = q('#catalog'); if (!container) return;
-  container.innerHTML = list.map(p => 
+  container.innerHTML = list.map(p => `
     <article class="card-product" data-id="${p.id}">
       <img src="${p.imgUrl || p.img || placeholderDataURL(p.title)}" alt="${escapeHtml(p.title)}" onclick="openProductModal('${p.id}')" />
       <h4>${escapeHtml(p.title)}</h4>
@@ -536,7 +526,7 @@ function renderProducts(list){
         <button class="btn primary" onclick="addToCartById('${p.id}',1)">Add to cart</button>
       </div>
     </article>
-  ).join('');
+  `).join('');
   applyFilters();
 }
 
@@ -544,7 +534,7 @@ function populateFilters(list){
   list = list || lastProducts || [];
   const categories = Array.from(new Set(list.map(x=>x.category).filter(Boolean)));
   const sel = q('#category-filter'); if (!sel) return;
-  sel.innerHTML = <option value="">All categories</option> + categories.map(c=><option value="${escapeHtml(c)}">${escapeHtml(c)}</option>).join('');
+  sel.innerHTML = `<option value="">All categories</option>` + categories.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 }
 
 function applyFilters(){
@@ -558,7 +548,7 @@ function applyFilters(){
   if (sort==='price-desc') list.sort((a,b)=>b.price-a.price);
   if (sort==='newest') list.sort((a,b)=>b.createdAt?.seconds - a.createdAt?.seconds);
   const container = q('#catalog'); if (!container) return;
-  container.innerHTML = list.map(p => 
+  container.innerHTML = list.map(p => `
     <article class="card-product" data-id="${p.id}">
       <img src="${p.imgUrl || p.img || placeholderDataURL(p.title)}" alt="${escapeHtml(p.title)}" onclick="openProductModal('${p.id}')" />
       <h4>${escapeHtml(p.title)}</h4>
@@ -569,7 +559,7 @@ function applyFilters(){
         <button class="btn primary" onclick="addToCartById('${p.id}',1)">Add to cart</button>
       </div>
     </article>
-  ).join('');
+  `).join('');
 }
 
 /* ---------- Product modal ---------- */
@@ -579,7 +569,7 @@ async function openProductModal(id){
     if (!doc.exists) return alert('Product not found');
     const p = { id: doc.id, ...doc.data() };
     const el = q('#product-detail');
-    el.innerHTML = 
+    el.innerHTML = `
       <div style="display:flex;gap:18px;flex-wrap:wrap">
         <div style="flex:1;min-width:260px"><img src="${p.imgUrl || p.img || placeholderDataURL(p.title)}" style="width:100%;border-radius:10px;object-fit:cover"/></div>
         <div style="flex:1;min-width:260px">
@@ -593,7 +583,7 @@ async function openProductModal(id){
           </div>
         </div>
       </div>
-    ;
+    `;
     const modal = q('#product-modal'); modal.style.display = 'flex'; modal.setAttribute('aria-hidden','false');
   } catch (err) { console.error(err); alert('Open product failed'); }
 }
@@ -611,10 +601,10 @@ function toggleCart(show){ const panel = q('#cart-panel'); if(!panel) return; pa
 function renderCartUI(){
   const container = q('#cart-items'); if(!container) return;
   const cart = getCart();
-  if(cart.length===0){ container.innerHTML=<div style="padding:18px;color:var(--muted)">Your cart is empty.</div>; q('#cart-total')&&(q('#cart-total').textContent=money(0)); return; }
+  if(cart.length===0){ container.innerHTML=`<div style="padding:18px;color:var(--muted)">Your cart is empty.</div>`; q('#cart-total')&&(q('#cart-total').textContent=money(0)); return; }
   Promise.all(cart.map(ci=>productsRef().doc(ci.id).get())).then(docs=>{
     const items = docs.map((doc,idx)=>({id:doc.id, ...(doc.data()||{}), qty: cart[idx].qty}));
-    container.innerHTML = items.map(it=>
+    container.innerHTML = items.map(it=>`
       <div class="cart-item" data-id="${it.id}">
         <img src="${it.imgUrl || it.img || placeholderDataURL(it.title)}" alt="${escapeHtml(it.title)}" />
         <div class="info">
@@ -629,7 +619,7 @@ function renderCartUI(){
           </div>
         </div>
       </div>
-    ).join('');
+    `).join('');
     const total = items.reduce((s,i)=>s+i.price*i.qty,0);
     q('#cart-total').textContent = money(total);
   });
@@ -686,7 +676,7 @@ async function placeOrder(e){
     toggleCart(false);
     closeCheckout();
 
-    openOrderSummary(Your order ID is ${orderRef.id}. You can track its status in "My Orders".);
+    openOrderSummary(`Your order ID is ${orderRef.id}. You can track its status in "My Orders".`);
 
   } catch(err){
     console.error(err);
@@ -732,16 +722,16 @@ function initCustomerOrders(){
           return;
         }
 
-        container.innerHTML = orders.map(o => 
+        container.innerHTML = orders.map(o => `
           <div class="order-card">
             <div><strong>Order ID:</strong> ${o.id}</div>
             <div><strong>Date:</strong> ${o.createdAt.toLocaleString()}</div>
             <div><strong>Total:</strong> ₱${o.total.toLocaleString()}</div>
             <div><strong>Status:</strong> <span class="order-status">${o.status}</span></div>
-            <div><strong>Items:</strong><br/>${o.items.map(i => ${i.title} ×${i.qty}).join('<br/>')}</div>
+            <div><strong>Items:</strong><br/>${o.items.map(i => `${i.title} ×${i.qty}`).join('<br/>')}</div>
             <hr/>
           </div>
-        ).join('');
+        `).join('');
       }, err => {
         console.error('Orders listener error', err);
         container.innerHTML = '<p>Failed to load orders, please refresh the page.</p>';
@@ -792,7 +782,7 @@ function renderAdminProducts(){
 
   container.innerHTML = list.map(p=>{
     const imgSrc = p.imgUrl || placeholderDataURL(p.title); // ensure imgUrl is used
-    return 
+    return `
       <div class="admin-item" style="
           display:flex; 
           align-items:center; 
@@ -817,7 +807,7 @@ function renderAdminProducts(){
           <button class="btn ghost small" onclick="deleteProduct('${p.id}')">Delete</button>
         </div>
       </div>
-    ;
+    `;
   }).join('');
 }
 
@@ -871,14 +861,14 @@ function initAdminOrders(){
     const rows = [];
     snapshot.forEach(doc=>{
       const o = {id: doc.id, ...doc.data()};
-      const items = o.items.map(i=>${i.title} ×${i.qty}).join('<br>');
+      const items = o.items.map(i=>`${i.title} ×${i.qty}`).join('<br>');
       const statusColor = {
         'Pending':'orange',
         'Processing':'blue',
         'Shipped':'purple',
         'Delivered':'green'
       }[o.status] || 'gray';
-      rows.push(
+      rows.push(`
         <tr>
           <td>${o.id}</td>
           <td>${escapeHtml(o.userName)}</td>
@@ -886,10 +876,10 @@ function initAdminOrders(){
           <td>${money(o.total)}</td>
           <td style="color:${statusColor};font-weight:bold">${o.status}</td>
           <td>
-            ${o.status!=='Delivered'?<button class="btn small" onclick="advanceOrder('${o.id}')">Next Stage</button>:''}
+            ${o.status!=='Delivered'?`<button class="btn small" onclick="advanceOrder('${o.id}')">Next Stage</button>`:''}
           </td>
         </tr>
-      );
+      `);
     });
     tbody.innerHTML = rows.join('');
   });
@@ -907,7 +897,3 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
-
-
-
-
