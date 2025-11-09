@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Admin Dashboard — CobainTech</title>
 <link rel="stylesheet" href="style.css">
-
 <style>
 /* ---------------- Global ---------------- */
 body { margin:0; font-family:'Segoe UI',Roboto,sans-serif; background:#0b0c0e; color:#eee; }
@@ -62,42 +61,117 @@ label { display:block; margin-bottom:6px; font-weight:600; }
 .metric h3 { font-size:1.2rem; margin-bottom:8px; }
 .metric p { font-size:1.5rem; font-weight:bold; color:#3498db; }
 
-/* ---------------- Buttons ---------------- */
-.btn-store, .btn-logout { background: #3498db; border: none; color: #fff; padding: 8px 16px; border-radius: 6px; font-weight: 500; transition: background 0.2s; }
-.btn-store:hover { background: #2980b9; }
-.btn-logout { background: #e74c3c; }
-.btn-logout:hover { background: #c0392b; }
-
-/* ---------------- Admin Chat ---------------- */
+  /* Chat User List */
 #chat-users .chat-user {
-  display:flex; align-items:center; justify-content:space-between;
-  padding:10px 12px; background:#111; border-radius:12px; cursor:pointer; transition:0.2s; position:relative;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:12px;
+  background:#111;
+  border-radius:12px;
+  cursor:pointer;
+  transition:0.2s;
 }
-#chat-users .chat-user:hover { background:#3498db; color:#fff; }
-.chat-user .left { display:flex; align-items:center; gap:10px; }
-.chat-user img.avatar { width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid #3498db; }
-.chat-user .name-status { display:flex; flex-direction:column; }
-.chat-user .name-status span.name { font-weight:bold; color:#eee; }
-.chat-user .name-status span.status { font-size:0.75rem; color:#2ecc71; }
-.chat-user .status-offline { color:#e74c3c; }
-.chat-user .unread { background:#e74c3c; color:#fff; font-size:0.7rem; font-weight:bold; padding:2px 6px; border-radius:12px; position:absolute; right:10px; top:50%; transform:translateY(-50%); display:none; }
-.message { max-width:70%; padding:10px 14px; border-radius:12px; word-wrap:break-word; font-size:0.95rem; display:flex; flex-direction:column; }
-.message.customer { background:#222; align-self:flex-start; }
-.message.admin { background:#3498db; color:#fff; align-self:flex-end; }
-.message span.name { font-weight:bold; display:block; margin-bottom:4px; font-size:0.85rem; color:#eee; }
-.message span.time { font-size:0.7rem; color:#999; display:block; margin-top:4px; text-align:right; }
+#chat-users .chat-user:hover {
+  background:#3498db;
+  color:#fff;
+}
+
+/* Chat Messages */
+.message {
+  max-width:70%;
+  padding:10px 14px;
+  border-radius:12px;
+  word-wrap:break-word;
+  font-size:0.95rem;
+}
+.message.customer { 
+  background:#222; 
+  align-self:flex-start; 
+}
+.message.admin { 
+  background:#3498db; 
+  color:#fff;
+  align-self:flex-end; 
+}
+.message span.name {
+  font-weight:bold;
+  display:block;
+  margin-bottom:4px;
+  font-size:0.85rem;
+  color:#eee;
+}
+.message span.time {
+  font-size:0.7rem;
+  color:#999;
+  display:block;
+  margin-top:4px;
+  text-align:right;
+}
+  
 </style>
 </head>
-
 <body>
+
 <header>
   <div class="brand">CobainTech Admin</div>
   <div class="header-actions" style="display:flex;align-items:center;gap:10px;">
     <span id="welcome-user-top" style="margin-right:10px;"></span>
-    <button onclick="window.open('index.html','_blank')" class="btn-store">🏬 Store</button>
-    <button onclick="logoutUser()" class="btn-logout">🔒 Logout</button>
+
+    <!-- Store Button -->
+    <button onclick="window.open('index.html','_blank')" class="btn-store">
+      🏬 Store
+    </button>
+
+    <!-- Logout Button -->
+    <button onclick="logoutUser()" class="btn-logout">
+      🔒 Logout
+    </button>
   </div>
 </header>
+
+<style>
+.btn-store, .btn-logout {
+  background: #3498db;
+  border: none;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.btn-store:hover { background: #2980b9; }
+.btn-logout {
+  background: #e74c3c;
+}
+.btn-logout:hover {
+  background: #c0392b;
+}
+</style>
+
+<script>
+// Wait until Firebase is fully loaded
+window.addEventListener('load', () => {
+  // Redefine logout function after Firebase initializes
+  window.logoutUser = function() {
+    if (firebase && firebase.auth) {
+      firebase.auth().signOut()
+        .then(() => {
+          console.log('User signed out successfully.');
+          window.location.href = "index.html"; // redirect to store main page
+        })
+        .catch((error) => {
+          console.error("Logout failed:", error);
+          alert("Logout failed. Check console for details.");
+        });
+    } else {
+      console.error("Firebase not loaded yet.");
+      alert("Please wait a few seconds and try again.");
+    }
+  };
+});
+</script>
+
 
 <div class="container">
   <nav class="sidebar">
@@ -134,27 +208,29 @@ label { display:block; margin-bottom:6px; font-weight:600; }
       <div id="admin-product-list" class="product-grid"></div>
     </section>
 
-    <!-- Chat Tab -->
-    <section id="tab-chat" style="display:none;">
-      <div class="card" style="padding:20px;">
-        <h3>Customer Messages</h3>
-        <div id="chat-users" style="margin-top:16px; display:flex; flex-direction:column; gap:12px;"></div>
+<!-- ---------------- Admin Chat ---------------- -->
+<section id="tab-chat" style="display:none;">
+  <div class="card" style="padding:20px;">
+    <h3>Customer Messages</h3>
 
-        <div id="chat-admin-box" style="display:none; margin-top:20px; border-top:1px solid #333; padding-top:16px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <h4 id="chat-with" style="font-size:1.2rem;"></h4>
-            <button onclick="closeChat()" style="background:#e74c3c;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;">Close</button>
-          </div>
+    <div id="chat-users" style="margin-top:16px; display:flex; flex-direction:column; gap:12px;"></div>
 
-          <div id="chat-admin-messages" style="height:300px; overflow-y:auto; background:#1a1a1a; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px;"></div>
-
-          <div style="display:flex; margin-top:10px; gap:8px;">
-            <input id="admin-chat-input" placeholder="Type a message..." style="flex:1; padding:8px 12px; border-radius:8px; border:1px solid #333; background:#0b0c0e; color:#eee;">
-            <button onclick="adminSendChat()" style="background:#3498db;color:#fff;border:none;padding:8px 16px;border-radius:8px; cursor:pointer;">Send</button>
-          </div>
-        </div>
+    <div id="chat-admin-box" style="display:none; margin-top:20px; border-top:1px solid #333; padding-top:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h4 id="chat-with" style="font-size:1.2rem;"></h4>
+        <button onclick="closeChat()" style="background:#e74c3c;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;">Close</button>
       </div>
-    </section>
+
+      <div id="chat-admin-messages" style="height:300px; overflow-y:auto; background:#1a1a1a; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px;"></div>
+
+      <div style="display:flex; margin-top:10px; gap:8px;">
+        <input id="admin-chat-input" placeholder="Type a message..." style="flex:1; padding:8px 12px; border-radius:8px; border:1px solid #333; background:#0b0c0e; color:#eee;">
+        <button onclick="adminSendChat()" style="background:#3498db;color:#fff;border:none;padding:8px 16px;border-radius:8px; cursor:pointer;">Send</button>
+      </div>
+    </div>
+  </div>
+</section>
+
 
     <!-- Orders Tab -->
     <section id="tab-orders" style="display:none">
@@ -193,31 +269,172 @@ label { display:block; margin-bottom:6px; font-weight:600; }
         <canvas id="salesChart" height="250"></canvas>
       </div>
     </section>
-
-    <!-- Settings Tab -->
-    <section id="tab-settings" style="display:none">
-      <div class="card">
-        <h3>Store Settings</h3>
-        <form id="settings-form" onsubmit="saveSettings(event)">
-          <label>Store Name <input id="store-name" placeholder="CobainTech"></label>
-          <label>Store Logo URL <input id="store-logo" placeholder="https://example.com/logo.png"></label>
-          <label>Contact Email <input id="store-email" placeholder="support@cobaintech.com"></label>
-          <label>Contact Phone <input id="store-phone" placeholder="+63 900 000 0000"></label>
-          <button type="submit" class="btn primary">Save Settings</button>
-        </form>
-      </div>
-    </section>
-
+<!-- Settings Tab -->
+<section id="tab-settings" style="display:none">
+  <div class="card">
+    <h3>Store Settings</h3>
+    <form id="settings-form" onsubmit="saveSettings(event)">
+      <label>Store Name
+        <input id="store-name" placeholder="CobainTech">
+      </label>
+      <label>Store Logo URL
+        <input id="store-logo" placeholder="https://example.com/logo.png">
+      </label>
+      <label>Contact Email
+        <input id="store-email" placeholder="support@cobaintech.com">
+      </label>
+      <label>Contact Phone
+        <input id="store-phone" placeholder="+63 900 000 0000">
+      </label>
+      <button type="submit" class="btn primary">Save Settings</button>
+    </form>
+  </div>
+</section>
   </main>
 </div>
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="script.js"></script>
+
+<script>
+function showTab(tab){
+  ['products','orders','sales','settings','chat'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display=(t===tab)?'block':'none';
+    document.querySelectorAll('.sidebar button').forEach(btn=>{
+      if(btn.textContent.toLowerCase()===t) btn.classList.toggle('active', t===tab);
+    });
+  });
+}
+
+// Products rendering with Firestore imgUrl
+function renderAdminProducts(){
+  const container = document.getElementById('admin-product-list');
+  db.collection('products').orderBy('createdAt','desc').get().then(snapshot=>{
+    const products=[];
+    snapshot.forEach(doc=>{
+      const p = doc.data();
+      p.id = doc.id;
+      const searchValue = (document.getElementById('admin-search').value||'').toLowerCase();
+      if(!searchValue || p.title.toLowerCase().includes(searchValue) || (p.category||'').toLowerCase().includes(searchValue)){
+        products.push(p);
+      }
+    });
+
+    container.innerHTML = products.map(p=>`
+      <div class="product-card">
+        <img src="${p.imgUrl||'https://via.placeholder.com/150'}" alt="${p.title}">
+        <div class="product-info">
+          <h4>${p.title}</h4>
+          <p>₱${p.price.toLocaleString()}</p>
+          <p>Stock: ${p.stock||0}</p>
+          <p>Category: ${p.category||''}</p>
+          <div class="actions">
+            <button class="btn small primary" onclick="editProduct('${p.id}')">Edit</button>
+            <button class="btn small ghost" onclick="deleteProduct('${p.id}')">Delete</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  });
+}
+
+// Sales chart
+let salesChart;
+function renderSalesChart(){
+  const ctx = document.getElementById('salesChart').getContext('2d');
+  db.collection('orders').orderBy('createdAt').get().then(snapshot=>{
+    const labels = [], data = [];
+    snapshot.forEach(doc=>{
+      const o = doc.data();
+      const date = o.createdAt?.toDate().toLocaleDateString() || '';
+      labels.push(date);
+      data.push(o.total||0);
+    });
+    if(salesChart) salesChart.destroy();
+    salesChart = new Chart(ctx,{
+      type:'line',
+      data:{labels, datasets:[{label:'Order Total', data, borderColor:'#3498db', backgroundColor:'rgba(52,152,219,0.2)'}]},
+      options:{responsive:true, plugins:{legend:{display:false}}}
+    });
+  });
+}
+
+// Load admin dashboard
+window.addEventListener('load', () => {
+  bindAuthState();
+  initAdmin();
+  initAdminOrders();
+  renderAdminProducts();
+  renderSalesChart();
+
+  console.log("✅ Admin page loaded. Initializing chat listener...");
+  initChat();  // <-- REQUIRED
+});
+
+
+
+  // Sales metrics
+  ordersRef().onSnapshot(snapshot=>{
+    let totalRevenue=0;
+    snapshot.forEach(doc=>{ totalRevenue+=doc.data().total||0; });
+    document.getElementById('total-revenue').textContent='₱'+totalRevenue.toLocaleString();
+    document.getElementById('total-orders').textContent=snapshot.size;
+  });
+  
+</script>
+<script>
+// ---------- SETTINGS ----------
+function loadSettings() {
+  db.collection('settings').doc('store').get().then(doc => {
+    if (doc.exists) {
+      const s = doc.data();
+      document.getElementById('store-name').value = s.name || '';
+      document.getElementById('store-logo').value = s.logo || '';
+      document.getElementById('store-email').value = s.email || '';
+      document.getElementById('store-phone').value = s.phone || '';
+    }
+  }).catch(err => console.error('Error loading settings:', err));
+}
+
+function saveSettings(e) {
+  e.preventDefault();
+  const name = document.getElementById('store-name').value;
+  const logo = document.getElementById('store-logo').value;
+  const email = document.getElementById('store-email').value;
+  const phone = document.getElementById('store-phone').value;
+
+  db.collection('settings').doc('store').set({
+    name, logo, email, phone, updatedAt: new Date()
+  }).then(() => {
+    alert('Settings saved successfully!');
+  }).catch(err => {
+    console.error('Error saving settings:', err);
+    alert('Failed to save settings.');
+  });
+}
+
+// Auto-load when Settings tab is opened
+function showTab(tab){
+  ['products','orders','sales','settings','chat'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = (t === tab) ? 'block' : 'none';
+
+    document.querySelectorAll('.sidebar button').forEach(btn=>{
+      if (btn.textContent.toLowerCase() === t)
+        btn.classList.toggle('active', t === tab);
+    });
+  });
+
+  // Load settings only when tab is opened
+  if (tab === 'settings') loadSettings();
+}
+
+</script>
 </body>
 </html>
