@@ -79,7 +79,9 @@ async function sendChat() {
 
 // Listen for real-time chat messages
 function listenForMessages(currentUserId) {
-  const chatBox = document.getElementById("chatBox");
+  const chatBox = document.getElementById("chat-messages"); // ✅ corrected
+
+  if (!chatBox) return; // ✅ prevent crash if element is missing
 
   const q = query(
     collection(db, "chats"),
@@ -107,6 +109,7 @@ function listenForMessages(currentUserId) {
     chatBox.scrollTop = chatBox.scrollHeight;
   });
 }
+
 
 
 
@@ -757,6 +760,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
