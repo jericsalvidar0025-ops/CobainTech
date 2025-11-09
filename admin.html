@@ -244,7 +244,7 @@ window.addEventListener('load', () => {
 
 <script>
 function showTab(tab){
-  ['products','orders','sales'].forEach(t=>{
+  ['products','orders','sales','settings','chat'].forEach(t=>{
     document.getElementById('tab-'+t).style.display=(t===tab)?'block':'none';
     document.querySelectorAll('.sidebar button').forEach(btn=>{
       if(btn.textContent.toLowerCase()===t) btn.classList.toggle('active', t===tab);
@@ -373,6 +373,7 @@ function showTab(tab){
 </script>
 </body>
 </html>
+
 
 
 
