@@ -100,31 +100,30 @@ function startCustomerChat(userId) {
 
   listenToCustomerMessages(userId);
 }
-
 function sendChat() {
   const input = document.getElementById("chat-input");
-  if (!input) return;
-  const message = input.value.trim();
-  if (!message) return;
+  const msg = input.value.trim();
+  if (!msg) return;
 
   const user = auth.currentUser;
-  if (!user) {
-    alert('Please login to chat.');
-    return;
-  }
+  if (!user) return alert("Please login first");
 
-  // Save message under chats/{userId}/messages
-  db.collection('chats').doc(user.uid).collection('messages').add({
+  // ✅ Ensure chat document exists
+  db.collection("chats").doc(user.uid).set({
+    userId: user.uid,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  // ✅ Save message
+  db.collection("chats").doc(user.uid).collection("messages").add({
     sender: "customer",
-    message: message,
+    message: msg,
     timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(() => {
-    input.value = "";
-  }).catch(err => {
-    console.error("Failed to send chat:", err);
-    alert("Failed to send message. Check console for details.");
   });
+
+  input.value = "";
 }
+
 
 function listenToCustomerMessages(userId) {
   const box = document.getElementById("chat-messages");
@@ -891,6 +890,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
