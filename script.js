@@ -102,27 +102,31 @@ function startCustomerChat(userId) {
 }
 function sendChat() {
   const input = document.getElementById("chat-input");
-  const msg = input.value.trim();
-  if (!msg) return;
+  const message = input.value.trim();
+  if (!message) return;
 
   const user = auth.currentUser;
-  if (!user) return alert("Please login first");
+  if (!user) {
+    alert("Please login to chat.");
+    return;
+  }
 
-  // ✅ Ensure chat document exists
+  // ✅ ensure chat doc exists with userId
   db.collection("chats").doc(user.uid).set({
-    userId: user.uid,
+    userId: user.uid,   // <-- VERY IMPORTANT
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 
-  // ✅ Save message
+  // ✅ add message under messages subcollection
   db.collection("chats").doc(user.uid).collection("messages").add({
     sender: "customer",
-    message: msg,
+    message: message,
     timestamp: firebase.firestore.FieldValue.serverTimestamp()
   });
 
   input.value = "";
 }
+
 
 
 function listenToCustomerMessages(userId) {
@@ -890,6 +894,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
