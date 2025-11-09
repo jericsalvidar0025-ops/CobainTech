@@ -306,16 +306,17 @@ function renderSalesChart(){
 }
 
 // Load admin dashboard
-window.addEventListener('load',()=>{
+window.addEventListener('load', () => {
   bindAuthState();
   initAdmin();
   initAdminOrders();
   renderAdminProducts();
   renderSalesChart();
 
-  // ✅ Initialize chat listener (admin side)
-  initChat();
+  console.log("✅ Admin page loaded. Initializing chat listener...");
+  initChat();  // <-- REQUIRED
 });
+
 
 
   // Sales metrics
@@ -360,19 +361,23 @@ function saveSettings(e) {
 
 // Auto-load when Settings tab is opened
 function showTab(tab){
-  ['products','orders','sales','settings'].forEach(t=>{
-    document.getElementById('tab-'+t).style.display=(t===tab)?'block':'none';
+  ['products','orders','sales','settings','chat'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = (t === tab) ? 'block' : 'none';
+
     document.querySelectorAll('.sidebar button').forEach(btn=>{
-      if(btn.textContent.toLowerCase()===t)
-        btn.classList.toggle('active', t===tab);
+      if (btn.textContent.toLowerCase() === t)
+        btn.classList.toggle('active', t === tab);
     });
   });
 
-  if(tab==='settings') loadSettings();
+  // Load settings only when tab is opened
+  if (tab === 'settings') loadSettings();
 }
+
 </script>
 </body>
 </html>
+
 
 
 
