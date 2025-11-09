@@ -67,37 +67,47 @@ async function sendChat() {
   if (!user) return alert("You must be logged in to send messages.");
 
   await addDoc(collection(db, "chats"), {
-    userId: user.uid,          // ✅ required for Firestore rules
-    message: chatMessage,
-    sender: isAdmin ? "admin" : "customer",
-    createdAt: serverTimestamp()
-  });
-
+  message: chatMessage,
+  sender: isAdmin ? "admin" : "customer",
+  userId: auth.currentUser.uid,        // ✅ REQUIRED
+  createdAt: serverTimestamp()
+});
+  
   chatInput.value = "";
 }
 
 
-// Live listener for customer chat messages
-function listenToChat(userId) {
-  db.collection("chats")
-    .where("userId", "==", userId)
-    .orderBy("createdAt")
-    .onSnapshot(snapshot => {
-      const box = document.getElementById("chat-messages");
-      if (!box) return;
+// Listen for real-time chat messages
+function listenForMessages(currentUserId) {
+  const chatBox = document.getElementById("chatBox");
 
-      box.innerHTML = "";
-      snapshot.forEach(doc => {
-        const chat = doc.data();
-        const align = chat.sender === "admin" ? "right" : "left";
-        box.innerHTML += `<div style="text-align:${align}; margin:6px 0;">
-          <span style="background:#222;padding:6px 10px;border-radius:8px;">${chat.message}</span>
-        </div>`;
-      });
+  const q = query(
+    collection(db, "chats"),
+    where("userId", "==", currentUserId),
+    orderBy("createdAt", "asc")
+  );
 
-      box.scrollTop = box.scrollHeight;
+  onSnapshot(q, (snapshot) => {
+    chatBox.innerHTML = ""; // clear first
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const message = document.createElement("div");
+
+      if (data.sender === "admin") {
+        message.classList.add("chat-message-admin");
+      } else {
+        message.classList.add("chat-message-user");
+      }
+
+      message.textContent = data.message;
+      chatBox.appendChild(message);
     });
+
+    chatBox.scrollTop = chatBox.scrollHeight;
+  });
 }
+
 
 
 /* ------------------ ADMIN SIDE ---------------------- */
@@ -747,6 +757,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
