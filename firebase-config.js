@@ -17,14 +17,15 @@ firebase.initializeApp(firebaseConfig);
 // Initialize Firebase services
 const auth = firebase.auth();
 const db = firebase.firestore();
-const storage = firebase.storage();
+
 
 // Expose globally so other scripts can access
 window.auth = auth;
 window.db = db;
-window.storage = storage;
+
 
 // Helper to get collection references globally
 window.productsRef = () => db.collection('products');
 window.ordersRef = () => db.collection('orders');
 window.usersRef = () => db.collection('users');
+
