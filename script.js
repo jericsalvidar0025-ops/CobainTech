@@ -58,20 +58,24 @@ function toggleChatBox() {
 }
 
 // Send chat from customer UI
-function sendChat() {
-  const msg = document.getElementById("chat-input").value.trim();
-  const user = auth.currentUser;
-  if (!msg || !user) return;
+async function sendChat() {
+  const chatInput = document.getElementById("chatInput");
+  const chatMessage = chatInput.value.trim();
+  if (!chatMessage) return;
 
-  db.collection("chats").add({
-    userId: user.uid,
-    sender: "customer",
-    message: msg,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  const user = auth.currentUser;
+  if (!user) return alert("You must be logged in to send messages.");
+
+  await addDoc(collection(db, "chats"), {
+    userId: user.uid,          // ✅ required for Firestore rules
+    message: chatMessage,
+    sender: isAdmin ? "admin" : "customer",
+    createdAt: serverTimestamp()
   });
 
-  document.getElementById("chat-input").value = "";
+  chatInput.value = "";
 }
+
 
 // Live listener for customer chat messages
 function listenToChat(userId) {
@@ -99,29 +103,26 @@ function listenToChat(userId) {
 /* ------------------ ADMIN SIDE ---------------------- */
 
 // Show all users who sent messages
-function loadChatUsers() {
-  db.collection("chats")
-    .orderBy("createdAt")
-    .onSnapshot(snapshot => {
-      const container = document.getElementById("chat-users");
-      if (!container) return;
+function loadChat(chatUserId) {
+  const chatList = collection(db, "chats");
+  const q = query(chatList, where("userId", "==", chatUserId), orderBy("createdAt", "asc"));
 
-      const usersMap = new Map();
+  onSnapshot(q, (snapshot) => {
+    const chatBox = document.getElementById("chatMessages");
+    chatBox.innerHTML = ""; // Clear before appending
 
-      snapshot.forEach(doc => {
-        const chat = doc.data();
-        usersMap.set(chat.userId, true);
-      });
-
-      container.innerHTML = "";
-      usersMap.forEach((_, userId) => {
-        container.innerHTML += `<button onclick="openAdminChat('${userId}')"
-            style="padding:10px;margin:6px;width:100%;background:#222;border:none;border-radius:6px;">
-            User: ${userId}
-          </button>`;
-      });
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const div = document.createElement("div");
+      div.className = data.sender === "admin" ? "chat-admin" : "chat-user";
+      div.innerHTML = `<p>${data.message}</p>`;
+      chatBox.appendChild(div);
     });
+
+    chatBox.scrollTop = chatBox.scrollHeight;
+  });
 }
+
 
 // Opens a chat session with a specific customer
 function openAdminChat(userId) {
@@ -746,6 +747,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
