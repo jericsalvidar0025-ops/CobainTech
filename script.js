@@ -340,69 +340,6 @@ function adminSendChat() {
   });
 }
 
-
-
-/* ---------- Auth: signup/login/logout ---------- */
-async function signupUser(e){
-  e.preventDefault();
-  const username = (q('#signup-username')||{}).value?.trim();
-  const email = (q('#signup-email')||{}).value?.trim();
-  const password = (q('#signup-password')||{}).value;
-  if (!username || !email || !password) { alert('Complete all fields'); return false; }
-  try {
-    const cred = await auth.createUserWithEmailAndPassword(email, password);
-    const uid = cred.user.uid;
-    await usersRef().doc(uid).set({
-      username,
-      email,
-      role: 'customer',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    alert('Account created. Redirecting to store...');
-    window.location.href = 'index.html';
-  } catch (err) { console.error(err); alert(err.message || 'Signup failed'); }
-  return false;
-}
-
-async function loginUser(e){
-  e.preventDefault();
-  const email = (q('#login-username')||{}).value?.trim();
-  const password = (q('#login-password')||{}).value;
-  if (!email || !password) { alert('Complete fields'); return false; }
-  try { await auth.signInWithEmailAndPassword(email, password); } 
-  catch (err) { console.error(err); alert(err.message || 'Login failed'); }
-  return false;
-}
-
-function logoutUser(){ auth.signOut(); }
-
-/* ---------- auth state & UI ---------- */
-function bindAuthState(){
-  auth.onAuthStateChanged(async user => {
-    const welcome = q('#welcome-user-top');
-    const loginLink = q('#login-link');
-    const signupLink = q('#signup-link');
-    const adminLink = q('#admin-link');
-    if (user) {
-      try {
-        const doc = await usersRef().doc(user.uid).get();
-        const username = doc.exists ? (doc.data().username || user.email.split('@')[0]) : user.email.split('@')[0];
-        if (welcome) welcome.textContent = `Hi, ${username}`;
-        if (loginLink) loginLink.style.display = 'none';
-        if (signupLink) signupLink.style.display = 'none';
-        if (doc.exists && doc.data().role === 'admin') {
-          if (adminLink) adminLink.style.display = 'inline-block';
-          if (location.pathname.endsWith('login.html')) window.location.href = 'admin.html';
-        }
-      } catch (err) { console.error('Failed to read user doc', err); }
-    } else {
-      if (welcome) welcome.textContent = '';
-      if (loginLink) loginLink.style.display = 'inline-block';
-      if (signupLink) signupLink.style.display = 'inline-block';
-      if (adminLink) adminLink.style.display = 'none';
-    }
-  });
-}
 function toggleChatBox() {
   const box = document.getElementById("chat-box");
   box.style.display = box.style.display === "none" ? "flex" : "none";
@@ -489,6 +426,68 @@ function adminSendChat() {
     });
 
   document.getElementById("admin-chat-input").value = "";
+}
+
+/* ---------- Auth: signup/login/logout ---------- */
+async function signupUser(e){
+  e.preventDefault();
+  const username = (q('#signup-username')||{}).value?.trim();
+  const email = (q('#signup-email')||{}).value?.trim();
+  const password = (q('#signup-password')||{}).value;
+  if (!username || !email || !password) { alert('Complete all fields'); return false; }
+  try {
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    const uid = cred.user.uid;
+    await usersRef().doc(uid).set({
+      username,
+      email,
+      role: 'customer',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    alert('Account created. Redirecting to store...');
+    window.location.href = 'index.html';
+  } catch (err) { console.error(err); alert(err.message || 'Signup failed'); }
+  return false;
+}
+
+async function loginUser(e){
+  e.preventDefault();
+  const email = (q('#login-username')||{}).value?.trim();
+  const password = (q('#login-password')||{}).value;
+  if (!email || !password) { alert('Complete fields'); return false; }
+  try { await auth.signInWithEmailAndPassword(email, password); } 
+  catch (err) { console.error(err); alert(err.message || 'Login failed'); }
+  return false;
+}
+
+function logoutUser(){ auth.signOut(); }
+
+/* ---------- auth state & UI ---------- */
+function bindAuthState(){
+  auth.onAuthStateChanged(async user => {
+    const welcome = q('#welcome-user-top');
+    const loginLink = q('#login-link');
+    const signupLink = q('#signup-link');
+    const adminLink = q('#admin-link');
+    if (user) {
+      try {
+        const doc = await usersRef().doc(user.uid).get();
+        const username = doc.exists ? (doc.data().username || user.email.split('@')[0]) : user.email.split('@')[0];
+        if (welcome) welcome.textContent = `Hi, ${username}`;
+        if (loginLink) loginLink.style.display = 'none';
+        if (signupLink) signupLink.style.display = 'none';
+        if (doc.exists && doc.data().role === 'admin') {
+          if (adminLink) adminLink.style.display = 'inline-block';
+          if (location.pathname.endsWith('login.html')) window.location.href = 'admin.html';
+        }
+      } catch (err) { console.error('Failed to read user doc', err); }
+    } else {
+      if (welcome) welcome.textContent = '';
+      if (loginLink) loginLink.style.display = 'inline-block';
+      if (signupLink) signupLink.style.display = 'inline-block';
+      if (adminLink) adminLink.style.display = 'none';
+    }
+  });
 }
 
 /* ---------- INDEX PAGE: products listing ---------- */
@@ -897,4 +896,5 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
