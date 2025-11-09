@@ -130,6 +130,7 @@ window.addEventListener('load', () => {
     <button onclick="showTab('orders')">Orders</button>
     <button onclick="showTab('sales')">Sales</button>
     <button onclick="showTab('settings')">Settings</button>
+    <button onclick="showTab('chat')">Chat</button>
   </nav>
 
   <main class="content">
@@ -157,6 +158,18 @@ window.addEventListener('load', () => {
       <input id="admin-search" placeholder="Search products..." oninput="renderAdminProducts()">
       <div id="admin-product-list" class="product-grid"></div>
     </section>
+<section id="tab-chat" style="display:none">
+  <div class="card">
+    <h3>Customer Messages</h3>
+    <div id="chat-users"></div>
+    <div id="chat-admin-box" style="display:none;">
+      <h4 id="chat-with"></h4>
+      <div id="chat-admin-messages" style="height:250px; overflow-y:auto;"></div>
+      <input id="admin-chat-input" placeholder="Type here...">
+      <button onclick="adminSendChat()">Send</button>
+    </div>
+  </div>
+</section>
 
     <!-- Orders Tab -->
     <section id="tab-orders" style="display:none">
@@ -355,6 +368,7 @@ function showTab(tab){
 </script>
 </body>
 </html>
+
 
 
 
