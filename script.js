@@ -103,41 +103,57 @@ function startCustomerChat(userId) {
 function sendChat() {
   const input = document.getElementById("chat-input");
   const message = input.value.trim();
-  if (!message) return;
 
-  const user = firebase.auth().currentUser;   // 👈 FIXED (forced compat auth)
-  if (!user) {
-    alert("Please login to chat.");
+  if (!message) {
+    console.log("🚫 Empty message.");
     return;
   }
 
-  console.log("✅ sendChat() triggered as:", user.uid);
+  const user = firebase.auth().currentUser; // <- FORCE AUTH REFERENCE
+
+  if (!user) {
+    alert("Please login to chat.");
+    console.log("❌ No auth user found.");
+    return;
+  }
+
+  console.log("✅ Auth user detected:", user.uid);
 
   const chatRef = firebase.firestore().collection("chats").doc(user.uid);
 
-  // ✅ Create/update main chat doc with userId
-  chatRef.set({
-    userId: user.uid,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true })
+  // ✅ STEP A: Create / Update parent chat doc with userId
+  chatRef
+    .set(
+      {
+        userId: user.uid,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+    .then(() => {
+      console.log("✅ Successfully wrote chat doc:", user.uid);
 
-  .then(() => {
-    return chatRef.collection("messages").add({
-      sender: "customer",
-      message: message,
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      // ✅ STEP B: Now save the actual message
+      return chatRef.collection("messages").add({
+        sender: "customer",
+        message: message,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    })
+    .then(() => {
+      console.log("✅ Message saved successfully.");
+      input.value = "";
+    })
+    .catch((error) => {
+      console.error("❌ ERROR saving chat:", error);
     });
-  })
-
-  .then(() => {
-    input.value = "";
-    console.log("✅ Message sent and userId saved");
-  })
-
-  .catch(err => {
-    console.error("❌ Chat send failed:", err);
-  });
 }
+
+function forceChatTest() {
+  const user = firebase.auth().currentUser;
+  console.log("🧪 TEST user:", user);
+}
+
 
 
 
@@ -906,6 +922,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
