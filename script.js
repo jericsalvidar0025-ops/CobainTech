@@ -1,9 +1,14 @@
+<!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-<script src="firebase-config.js"></script> <!-- your config -->
-<script src="script.js"></script> <!-- main logic -->
+<!-- Your config -->
+<script src="firebase-config.js"></script>
+
+<!-- Your main JS -->
+<script src="script.js"></script>
+
 /* script.js — CobainTech Firebase edition (updated full) */
 
 /* ---------- helpers ---------- */
@@ -903,5 +908,6 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
