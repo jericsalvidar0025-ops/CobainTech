@@ -29,6 +29,148 @@ window.addEventListener('load', () => {
   initCustomerOrders(); // Customer orders listener
 });
 
+/* -----------------------------------------------------------
+   CUSTOMER + ADMIN CHAT (REALTIME FIRESTORE CHAT SYSTEM)
+------------------------------------------------------------ */
+
+// Called on load (already referenced in your code)
+function initChat() {
+  auth.onAuthStateChanged(user => {
+    if (!user) return;
+
+    // Load chat messages for customer (in index.html)
+    if (document.getElementById("chat-messages")) {
+      listenToChat(user.uid);
+    }
+
+    // Load chat users for admin (in admin.html)
+    if (document.getElementById("chat-users")) {
+      loadChatUsers();
+    }
+  });
+}
+
+/* ------------------ CUSTOMER SIDE ---------------------- */
+
+function toggleChatBox() {
+  const box = document.getElementById("chat-box");
+  box.style.display = (box.style.display === "none") ? "flex" : "none";
+}
+
+// Send chat from customer UI
+function sendChat() {
+  const msg = document.getElementById("chat-input").value.trim();
+  const user = auth.currentUser;
+  if (!msg || !user) return;
+
+  db.collection("chats").add({
+    userId: user.uid,
+    sender: "customer",
+    message: msg,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  document.getElementById("chat-input").value = "";
+}
+
+// Live listener for customer chat messages
+function listenToChat(userId) {
+  db.collection("chats")
+    .where("userId", "==", userId)
+    .orderBy("createdAt")
+    .onSnapshot(snapshot => {
+      const box = document.getElementById("chat-messages");
+      if (!box) return;
+
+      box.innerHTML = "";
+      snapshot.forEach(doc => {
+        const chat = doc.data();
+        const align = chat.sender === "admin" ? "right" : "left";
+        box.innerHTML += `<div style="text-align:${align}; margin:6px 0;">
+          <span style="background:#222;padding:6px 10px;border-radius:8px;">${chat.message}</span>
+        </div>`;
+      });
+
+      box.scrollTop = box.scrollHeight;
+    });
+}
+
+
+/* ------------------ ADMIN SIDE ---------------------- */
+
+// Show all users who sent messages
+function loadChatUsers() {
+  db.collection("chats")
+    .orderBy("createdAt")
+    .onSnapshot(snapshot => {
+      const container = document.getElementById("chat-users");
+      if (!container) return;
+
+      const usersMap = new Map();
+
+      snapshot.forEach(doc => {
+        const chat = doc.data();
+        usersMap.set(chat.userId, true);
+      });
+
+      container.innerHTML = "";
+      usersMap.forEach((_, userId) => {
+        container.innerHTML += `<button onclick="openAdminChat('${userId}')"
+            style="padding:10px;margin:6px;width:100%;background:#222;border:none;border-radius:6px;">
+            User: ${userId}
+          </button>`;
+      });
+    });
+}
+
+// Opens a chat session with a specific customer
+function openAdminChat(userId) {
+  selectedChatUser = userId;
+  document.getElementById("chat-admin-box").style.display = "block";
+  document.getElementById("chat-with").textContent = `Chat with: ${userId}`;
+  loadAdminMessages(userId);
+}
+
+function loadAdminMessages(userId) {
+  db.collection("chats")
+    .where("userId", "==", userId)
+    .orderBy("createdAt")
+    .onSnapshot(snapshot => {
+      const box = document.getElementById("chat-admin-messages");
+      box.innerHTML = "";
+
+      snapshot.forEach(doc => {
+        const chat = doc.data();
+        const align = chat.sender === "admin" ? "right" : "left";
+
+        box.innerHTML += `
+          <div style="text-align:${align}; margin:6px 0;">
+            <span style="background:#333;padding:6px 10px;border-radius:8px;">${chat.message}</span>
+          </div>`;
+      });
+
+      box.scrollTop = box.scrollHeight;
+    });
+}
+
+// Admin sends reply
+function adminSendChat() {
+  const msg = document.getElementById("admin-chat-input").value.trim();
+  if (!msg || !selectedChatUser) return;
+
+  db.collection("chats").add({
+    userId: selectedChatUser,
+    sender: "admin",
+    message: msg,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  document.getElementById("admin-chat-input").value = "";
+}
+
+let selectedChatUser = null;
+
+
 /* ---------- Auth: signup/login/logout ---------- */
 async function signupUser(e){
   e.preventDefault();
@@ -604,6 +746,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
