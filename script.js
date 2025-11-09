@@ -408,26 +408,6 @@ function toggleChatBox() {
   box.style.display = box.style.display === "none" ? "flex" : "none";
 }
 
-function sendChat() {
-  const input = document.getElementById("chat-input");
-  const message = input.value.trim();
-  if (!message) return;
-
-  const user = auth.currentUser;
-  if (!user) return alert("Please log in to chat.");
-
-  db.collection("chats")
-    .doc(user.uid)
-    .collection("messages")
-    .add({
-      sender: "customer",
-      message: message,
-      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-
-  input.value = "";
-}
-
 function listenChat() {
   const user = auth.currentUser;
   if (!user) return;
@@ -917,6 +897,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
