@@ -38,166 +38,359 @@ window.addEventListener('load', () => {
 */
 
 // ------------------ INIT CHAT ------------------
-function initChat() {
-  auth.onAuthStateChanged(user => {
-    // ----------------- CUSTOMER (STORE) -----------------
-    if (document.getElementById("chat-messages")) {
-      if (user) {
-        startCustomerChat(user.uid, user.displayName || 'You');
-      } else {
-        const box = document.getElementById("chat-messages");
-        if (box) box.innerHTML = `<div style="padding:12px;color:#ddd">Please login to chat with us.</div>`;
-      }
-    }
+// ---------------------- CHAT: High-end upgrade (replace existing chat functions) ----------------------
 
-    // ----------------- ADMIN -----------------
-    if (document.getElementById("chat-users")) {
-      loadChatUsersRealtime();
-    }
-  });
+/*
+Structure used:
+- chats (collection)
+  - {userId} (doc) { userId, name, updatedAt, unreadForAdmin: bool, typing: bool }
+    - messages (subcollection)
+      - auto-id { sender: 'customer'|'admin', message: string, timestamp: Timestamp, readByAdmin: bool, readByCustomer: bool }
 
-  // Wire chat input (customer store)
-  const chatInputEl = document.getElementById('chat-input');
-  if (chatInputEl) {
-    chatInputEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendChat();
-      }
-    });
-  }
-}
+Notes:
+- Uses compat SDK (firebase.firestore(), firebase.auth()) — matches your project.
+- Make sure user docs (users collection) have a 'username' or 'name' field for fallback.
+*/
 
-// ----------------- TOGGLE CHAT BOX -----------------
-function toggleChatBox() {
-  const box = document.getElementById("chat-box");
-  if (!box) return;
-  box.style.display = box.style.display === "none" || box.style.display === "" ? "flex" : "none";
-}
-
-// ----------------- CUSTOMER CHAT -----------------
+const TYPING_DEBOUNCE_MS = 1200;
+let typingTimer = null;
 let customerChatUnsub = null;
-
-function startCustomerChat(userId, userName = 'You') {
-  if (customerChatUnsub) {
-    try { customerChatUnsub(); } catch(e){}
-    customerChatUnsub = null;
-  }
-
-  const box = document.getElementById("chat-messages");
-  if (!box) return;
-  box.innerHTML = `<div style="padding:12px;color:#ddd">Loading messages…</div>`;
-
-  const colRef = db.collection('chats').doc(userId).collection('messages');
-  const q = colRef.orderBy('timestamp', 'asc');
-
-  customerChatUnsub = q.onSnapshot(snapshot => {
-    box.innerHTML = '';
-    if (snapshot.empty) {
-      box.innerHTML = `<div style="padding:12px;color:#ddd">No messages yet. Say hi 👋</div>`;
-      return;
-    }
-
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const time = data.timestamp ? data.timestamp.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
-      const wrap = document.createElement('div');
-      wrap.style.marginBottom = '8px';
-      wrap.style.textAlign = (data.sender === 'customer') ? 'right' : 'left';
-
-      const bubble = document.createElement('span');
-      bubble.textContent = data.message;
-      bubble.style.display = 'inline-block';
-      bubble.style.padding = '8px 12px';
-      bubble.style.borderRadius = '12px';
-      bubble.style.maxWidth = '78%';
-      bubble.style.wordBreak = 'break-word';
-      bubble.style.background = (data.sender === 'customer') ? '#3498db' : '#444';
-      bubble.style.color = '#fff';
-
-      const timeEl = document.createElement('div');
-      timeEl.textContent = time;
-      timeEl.style.fontSize = '0.75rem';
-      timeEl.style.opacity = '0.7';
-      timeEl.style.marginTop = '4px';
-
-      wrap.appendChild(bubble);
-      wrap.appendChild(timeEl);
-      box.appendChild(wrap);
-    });
-
-    box.scrollTop = box.scrollHeight;
-  });
-}
-
-function sendChat() {
-  const input = document.getElementById("chat-input");
-  const message = input.value.trim();
-  if (!message) return;
-
-  const user = firebase.auth().currentUser;
-  if (!user) return alert("Please login to chat.");
-
-  const chatRef = db.collection("chats").doc(user.uid);
-
-  chatRef.set({
-    userId: user.uid,
-    name: user.displayName || 'Customer',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true })
-  .then(() => chatRef.collection("messages").add({
-    sender: "customer",
-    message: message,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  }))
-  .then(() => { input.value = ''; })
-  .catch(err => console.error("Failed to send chat:", err));
-}
-
-// ----------------- ADMIN CHAT -----------------
 let adminUsersUnsub = null;
 let adminMessagesUnsub = null;
 let currentAdminChatUser = null;
 
+// --- Init hook called from window load (keeps your original call) ---
+function initChat() {
+  // auth state: set up store & admin listeners when user changes
+  auth.onAuthStateChanged(user => {
+    // Customer view: start listening to own messages
+    if (document.getElementById('chat-messages')) {
+      if (user) startCustomerChat(user.uid, user.displayName || null);
+      else {
+        const box = document.getElementById('chat-messages');
+        if (box) box.innerHTML = `<div style="padding:12px;color:#ddd">Please login to chat with us.</div>`;
+      }
+    }
+
+    // Admin view: show list of chat users realtime
+    if (document.getElementById('chat-users')) {
+      loadChatUsersRealtime();
+      // request notification permission for admin
+      if ("Notification" in window && Notification.permission !== "granted") {
+        Notification.requestPermission().catch(()=>{});
+      }
+    }
+  });
+
+  // Wire input -> send (customer store)
+  const chatInputEl = document.getElementById('chat-input');
+  if (chatInputEl) {
+    chatInputEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); sendChat();
+      }
+    });
+    // typing indicator: send typing state to chats/{uid}.typing
+    chatInputEl.addEventListener('input', debounceCustomerTyping);
+  }
+
+  // Wire admin input Enter key for convenience
+  const adminInput = document.getElementById('admin-chat-input');
+  if (adminInput) {
+    adminInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); adminSendChat();
+      }
+    });
+  }
+}
+
+// ------------------- CUSTOMER (store) side -------------------
+function startCustomerChat(userId, displayName = null) {
+  // detach previous
+  if (customerChatUnsub) { try { customerChatUnsub(); } catch(e){} customerChatUnsub = null; }
+
+  const messagesBox = document.getElementById('chat-messages');
+  if (!messagesBox) return;
+
+  // ensure parent chat doc exists (merge)
+  db.collection('chats').doc(userId).set({
+    userId,
+    name: displayName || '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).catch(err => console.error('init chat doc failed', err));
+
+  // subscribe to messages
+  const colRef = db.collection('chats').doc(userId).collection('messages');
+  const q = colRef.orderBy('timestamp', 'asc');
+
+  customerChatUnsub = q.onSnapshot(snapshot => {
+    messagesBox.innerHTML = '';
+    if (snapshot.empty) {
+      messagesBox.innerHTML = `<div style="padding:12px;color:#ddd">No messages yet. Say hi 👋</div>`;
+      return;
+    }
+
+    snapshot.forEach(doc => {
+      const m = doc.data();
+      appendCustomerMessageToUI(messagesBox, m);
+    });
+
+    // mark customer's view read flags if needed (set readByCustomer true for admin messages)
+    markMessagesReadForCustomer(userId)
+      .catch(err => console.error('mark read for customer failed', err));
+
+    messagesBox.scrollTo({ top: messagesBox.scrollHeight, behavior: 'smooth' });
+  }, err => {
+    console.error('customer messages listener error', err);
+    messagesBox.innerHTML = `<div style="padding:12px;color:#f66">Failed to load messages.</div>`;
+  });
+
+  // clear typing state when navigating away
+  window.addEventListener('beforeunload', () => {
+    db.collection('chats').doc(userId).set({ typing: false }, { merge: true });
+  });
+}
+
+function appendCustomerMessageToUI(container, m) {
+  const time = m.timestamp ? m.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const wrap = document.createElement('div');
+  wrap.style.marginBottom = '8px';
+  wrap.style.textAlign = (m.sender === 'customer') ? 'right' : 'left';
+
+  const bubble = document.createElement('span');
+  bubble.textContent = m.message;
+  bubble.style.display = 'inline-block';
+  bubble.style.padding = '8px 12px';
+  bubble.style.borderRadius = '12px';
+  bubble.style.maxWidth = '78%';
+  bubble.style.wordBreak = 'break-word';
+  bubble.style.background = (m.sender === 'customer') ? '#3498db' : '#444';
+  bubble.style.color = '#fff';
+
+  // optionally show "delivered/seen" icons if you extend read receipts later
+  const timeEl = document.createElement('div');
+  timeEl.textContent = time;
+  timeEl.style.fontSize = '0.75rem';
+  timeEl.style.opacity = '0.7';
+  timeEl.style.marginTop = '4px';
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(timeEl);
+  container.appendChild(wrap);
+}
+
+async function markMessagesReadForCustomer(userId) {
+  // mark admin->customer messages as readByCustomer = true
+  const msgsSnap = await db.collection('chats').doc(userId).collection('messages')
+    .where('sender', '==', 'admin')
+    .where('readByCustomer', '==', false)
+    .get();
+
+  if (msgsSnap.empty) return;
+  const batch = db.batch();
+  msgsSnap.forEach(d => batch.update(d.ref, { readByCustomer: true }));
+  await batch.commit();
+}
+
+// send chat from customer
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  if (!input) return;
+  const message = input.value.trim();
+  if (!message) return;
+
+  const user = firebase.auth().currentUser;
+  if (!user) { alert('Please login to chat.'); return; }
+
+  const chatDocRef = db.collection('chats').doc(user.uid);
+  const messagesRef = chatDocRef.collection('messages');
+
+  // update parent doc (name, updatedAt, unread flag for admin)
+  const nameToSave = user.displayName || (user.email ? user.email.split('@')[0] : 'Customer');
+
+  chatDocRef.set({
+    userId: user.uid,
+    name: nameToSave,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    unreadForAdmin: true // flag admin UI to show badge
+  }, { merge: true })
+  .then(() => {
+    // add message doc
+    return messagesRef.add({
+      sender: 'customer',
+      message,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      readByAdmin: false,
+      readByCustomer: true
+    });
+  })
+  .then(() => {
+    input.value = '';
+    // optionally collapse typing state
+    chatDocRef.set({ typing: false }, { merge: true }).catch(()=>{});
+  })
+  .catch(err => {
+    console.error('sendChat error', err);
+    alert('Failed to send message. Check console.');
+  });
+}
+
+// typing indicator: debounce updates to chats/{uid}.typing
+function debounceCustomerTyping() {
+  const user = firebase.auth().currentUser;
+  if (!user) return;
+  const chatDocRef = db.collection('chats').doc(user.uid);
+
+  // set typing true immediately
+  chatDocRef.set({ typing: true }, { merge: true }).catch(()=>{});
+
+  // reset previous timer
+  if (typingTimer) clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    chatDocRef.set({ typing: false }, { merge: true }).catch(()=>{});
+  }, TYPING_DEBOUNCE_MS);
+}
+
+// ------------------- ADMIN side -------------------
+
+// helper: render a single user row (avatar + name + unread badge)
+function renderChatUsersList(chatDocs, unreadMap = {}) {
+  const listEl = document.getElementById('chat-users');
+  if (!listEl) return;
+
+  // sort by updatedAt desc
+  chatDocs.sort((a,b) => {
+    const aa = a.updatedAt ? a.updatedAt.toMillis?.() || (new Date(a.updatedAt)).getTime() : 0;
+    const bb = b.updatedAt ? b.updatedAt.toMillis?.() || (new Date(b.updatedAt)).getTime() : 0;
+    return bb - aa;
+  });
+
+  listEl.innerHTML = chatDocs.map(doc => {
+    const uid = doc.userId || doc.id;
+    const name = doc.name || doc.username || 'Customer';
+    const initials = (name.split(' ').map(p => p[0]).join('').slice(0,2) || 'U').toUpperCase();
+    const unread = unreadMap[uid] || 0;
+    const unreadHtml = unread > 0 ? `<span class="badge">${unread}</span>` : '';
+    return `
+      <button class="user-btn" data-uid="${uid}" onclick="openAdminChat('${uid}')">
+        <div class="avatar">${initials}</div>
+        <div style="flex:1; text-align:left; padding-left:8px;">
+          <div style="font-weight:600; color:#eee;">${escapeHtml(name)}</div>
+          <div style="font-size:0.8rem; color:#aaa;">${escapeHtml(doc.updatedAt ? (doc.updatedAt.toDate ? doc.updatedAt.toDate().toLocaleString() : new Date(doc.updatedAt).toLocaleString()) : '')}</div>
+        </div>
+        ${unreadHtml}
+      </button>
+    `;
+  }).join('');
+}
+
+// load chat users realtime and compute unread counts
 function loadChatUsersRealtime() {
   const listEl = document.getElementById('chat-users');
   if (!listEl) return;
 
-  if (adminUsersUnsub) { try { adminUsersUnsub(); } catch(e){} adminUsersUnsub=null; }
-
-  adminUsersUnsub = db.collection('chats').onSnapshot(snapshot => {
-    if (snapshot.empty) {
-      listEl.innerHTML = '<div style="padding:8px;color:#ddd">No chat users yet.</div>';
+  if (adminUsersUnsub) { try { adminUsersUnsub(); } catch(e){} adminUsersUnsub = null; }
+  adminUsersUnsub = db.collection('chats').onSnapshot(async snap => {
+    if (snap.empty) {
+      listEl.innerHTML = '<div style="padding:12px;color:#ddd">No chat users yet.</div>';
+      updateGlobalNotifBadge(0);
       return;
     }
 
-    const html = [];
-    snapshot.forEach(doc => {
-      const userId = doc.id;
-      const userName = doc.data().name || 'Customer';
-      html.push(`<button class="btn small" style="margin-bottom:6px;display:block;width:100%;text-align:left" onclick="openAdminChat('${userId}')">${userName}</button>`);
+    // gather docs
+    const docs = [];
+    snap.forEach(d => {
+      const data = d.data() || {};
+      docs.push({
+        id: d.id,
+        userId: d.id,
+        name: data.name || '',
+        updatedAt: data.updatedAt || null,
+        typing: data.typing || false
+      });
     });
-    listEl.innerHTML = html.join('');
+
+    // compute unread counts per user (customer -> admin unread)
+    const unreadMap = {};
+    // We'll fetch unread counts in parallel
+    await Promise.all(docs.map(async doc => {
+      try {
+        const msgs = await db.collection('chats').doc(doc.userId)
+          .collection('messages')
+          .where('sender', '==', 'customer')
+          .where('readByAdmin', '==', false)
+          .get();
+        unreadMap[doc.userId] = msgs.size || 0;
+      } catch (err) {
+        unreadMap[doc.userId] = 0;
+      }
+    }));
+
+    // render list
+    renderChatUsersList(docs, unreadMap);
+
+    // update global notif badge
+    const totalUnread = Object.values(unreadMap).reduce((s,n)=>s+n,0);
+    updateGlobalNotifBadge(totalUnread);
+
+    // show typing indicator on each user row (small tweak): append typing class if doc.typing true
+    docs.forEach(d => {
+      const el = listEl.querySelector(`button[data-uid="${d.userId}"]`);
+      if (el) {
+        if (d.typing) {
+          el.classList.add('typing');
+          // optionally show small "typing..." text
+          let tEl = el.querySelector('.typing-ind');
+          if (!tEl) {
+            tEl = document.createElement('div');
+            tEl.className = 'typing-ind';
+            tEl.style.fontSize = '0.8rem'; tEl.style.color = '#9b9b9b';
+            tEl.textContent = 'typing...';
+            el.querySelector('div').appendChild(tEl);
+          }
+        } else {
+          el.classList.remove('typing');
+          const tEl = el.querySelector('.typing-ind'); if (tEl) tEl.remove();
+        }
+      }
+    });
+  }, err => {
+    console.error('loadChatUsersRealtime error', err);
+    listEl.innerHTML = '<div style="padding:12px;color:#f66">Failed to load users.</div>';
   });
 }
 
-function openAdminChat(userId) {
+// open admin chat and attach listener to subcollection
+async function openAdminChat(userId) {
   currentAdminChatUser = userId;
 
+  // show chat UI
   const boxWrap = document.getElementById('chat-admin-box');
-  if (boxWrap) boxWrap.style.display = 'block';
-
+  if (boxWrap) boxWrap.style.display = 'flex';
   const withEl = document.getElementById('chat-with');
-  const userDoc = db.collection('chats').doc(userId);
-  userDoc.get().then(doc => {
-    withEl.textContent = "Chat with: " + (doc.data()?.name || 'Customer');
-  });
+  withEl.textContent = 'Chat with: ...';
 
-  listenAdminMessages(userId);
+  // fetch chat doc to show name
+  try {
+    const doc = await db.collection('chats').doc(userId).get();
+    const data = doc.data() || {};
+    withEl.textContent = 'Chat with: ' + (data.name || doc.id);
+  } catch (err) {
+    console.error('openAdminChat fetch error', err);
+  }
+
+  // mark unread -> read for this user
+  await markMessagesReadForAdmin(userId);
+
+  // attach message listener
+  attachAdminMessagesListener(userId);
 }
 
-function listenAdminMessages(userId) {
-  if (adminMessagesUnsub) { try { adminMessagesUnsub(); } catch(e){} adminMessagesUnsub=null; }
+// attach admin messages listener (single listener only)
+function attachAdminMessagesListener(userId) {
+  // remove previous
+  if (adminMessagesUnsub) { try { adminMessagesUnsub(); } catch(e){} adminMessagesUnsub = null; }
 
   const messagesBox = document.getElementById('chat-admin-messages');
   if (!messagesBox) return;
@@ -208,62 +401,198 @@ function listenAdminMessages(userId) {
 
   adminMessagesUnsub = q.onSnapshot(snapshot => {
     messagesBox.innerHTML = '';
-    if (snapshot.empty) { messagesBox.innerHTML='<div style="padding:8px;color:#ddd">No messages yet.</div>'; return; }
+    if (snapshot.empty) {
+      messagesBox.innerHTML = '<div style="padding:12px;color:#ddd">No messages yet.</div>';
+      return;
+    }
 
     snapshot.forEach(doc => {
-      const msg = doc.data();
-      const isAdmin = msg.sender === 'admin';
-
-      const wrap = document.createElement('div');
-      wrap.style.marginBottom = '8px';
-      wrap.style.textAlign = isAdmin ? 'right' : 'left';
-
-      const bubble = document.createElement('span');
-      bubble.textContent = msg.message;
-      bubble.style.display = 'inline-block';
-      bubble.style.padding = '8px 12px';
-      bubble.style.borderRadius = '10px';
-      bubble.style.background = isAdmin ? '#3498db' : '#444';
-      bubble.style.color = '#fff';
-      bubble.style.maxWidth = '78%';
-      bubble.style.wordBreak = 'break-word';
-
-      wrap.appendChild(bubble);
-
-      const timeEl = document.createElement('div');
-      timeEl.textContent = msg.timestamp ? msg.timestamp.toDate().toLocaleString() : '';
-      timeEl.style.fontSize = '0.75rem';
-      timeEl.style.opacity = '0.7';
-      timeEl.style.marginTop = '4px';
-      wrap.appendChild(timeEl);
-
-      messagesBox.appendChild(wrap);
+      const m = doc.data();
+      appendAdminMessageToUI(messagesBox, m);
     });
 
-    messagesBox.scrollTop = messagesBox.scrollHeight;
+    messagesBox.scrollTo({ top: messagesBox.scrollHeight, behavior: 'smooth' });
+  }, err => {
+    console.error('attachAdminMessagesListener error', err);
+    messagesBox.innerHTML = '<div style="padding:12px;color:#f66">Failed to load messages.</div>';
   });
 }
 
+function appendAdminMessageToUI(container, m) {
+  const time = m.timestamp ? m.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const wrap = document.createElement('div');
+  wrap.style.marginBottom = '8px';
+  wrap.style.display = 'flex';
+  wrap.style.flexDirection = 'column';
+  wrap.style.alignItems = (m.sender === 'admin') ? 'flex-end' : 'flex-start';
+
+  const bubble = document.createElement('div');
+  bubble.textContent = m.message;
+  bubble.className = 'bubble ' + (m.sender === 'admin' ? 'admin' : 'customer');
+  bubble.style.padding = '8px 12px';
+  bubble.style.borderRadius = '12px';
+  bubble.style.maxWidth = '78%';
+  bubble.style.wordBreak = 'break-word';
+
+  const timeEl = document.createElement('div');
+  timeEl.className = 'time';
+  timeEl.textContent = time;
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(timeEl);
+  container.appendChild(wrap);
+}
+
+// admin sends message
 function adminSendChat() {
   const input = document.getElementById('admin-chat-input');
   if (!input) return;
-  const msg = input.value.trim();
-  if (!msg) return;
+  const text = input.value.trim();
+  if (!text) return;
 
   const userId = currentAdminChatUser;
   if (!userId) return alert('Select a user first');
 
-  db.collection('chats').doc(userId).collection('messages').add({
-    sender: "admin",
-    message: msg,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(() => input.value = '');
+  const chatDocRef = db.collection('chats').doc(userId);
+  const messagesRef = chatDocRef.collection('messages');
+
+  // add message and clear unread flag for admin
+  messagesRef.add({
+    sender: 'admin',
+    message: text,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    readByAdmin: true,
+    readByCustomer: false
+  })
+  .then(() => {
+    // update parent doc: not unread for admin
+    return chatDocRef.set({
+      unreadForAdmin: false,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  })
+  .then(() => {
+    input.value = '';
+  })
+  .catch(err => {
+    console.error('adminSendChat error', err);
+    alert('Failed to send message.');
+  });
 }
 
-// ----------------- INITIALIZE -----------------
-window.addEventListener('load', () => {
-  initChat();
-});
+// mark messages as read by admin when admin opens chat (batch)
+async function markMessagesReadForAdmin(userId) {
+  try {
+    const q = db.collection('chats').doc(userId).collection('messages')
+      .where('sender', '==', 'customer')
+      .where('readByAdmin', '==', false);
+    const snap = await q.get();
+    if (snap.empty) {
+      // still ensure parent flag is false
+      await db.collection('chats').doc(userId).set({ unreadForAdmin: false }, { merge: true });
+      return;
+    }
+    const batch = db.batch();
+    snap.forEach(d => batch.update(d.ref, { readByAdmin: true }));
+    // also update parent doc
+    const chatRef = db.collection('chats').doc(userId);
+    batch.update(chatRef, { unreadForAdmin: false });
+    await batch.commit();
+  } catch (err) {
+    console.error('markMessagesReadForAdmin error', err);
+  }
+}
+
+// global notif badge update (top-level)
+function updateGlobalNotifBadge(count) {
+  const badge = document.getElementById('chat-notif');
+  if (!badge) return;
+  if (count > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = count > 99 ? '99+' : String(count);
+  } else {
+    badge.style.display = 'none';
+    badge.textContent = '';
+  }
+}
+
+// Browser Notification for admin (only when admin not focused or chat for user not open)
+function notifyAdminOfIncomingMessage(userId, name, message) {
+  try {
+    if (!("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+
+    const isActive = (document.visibilityState === 'visible') && (currentAdminChatUser === userId);
+    if (isActive) return; // admin is already viewing this chat
+
+    const n = new Notification(name || 'Customer', {
+      body: message.length > 100 ? message.slice(0, 97) + '...' : message,
+      tag: `chat-${userId}`,
+      renotify: true
+    });
+    n.onclick = () => {
+      window.focus();
+      openAdminChat(userId);
+      n.close();
+    };
+  } catch (err) { /* ignore */ }
+}
+
+// Listen for new customer messages globally (for notifications & updating unread counts instantly)
+function attachGlobalMessageWatcherForNotifications() {
+  // Listen to all chats' messages added events using collectionGroup
+  // Note: collectionGroup listeners are supported in Firestore. Make sure your billing plan supports it.
+  try {
+    db.collectionGroup('messages')
+      .orderBy('timestamp', 'desc')
+      .limit(100) // limit to recent events to reduce noise
+      .onSnapshot(snap => {
+        snap.docChanges().forEach(change => {
+          if (change.type !== 'added') return;
+          const msg = change.doc.data();
+          // We only care about customer -> admin messages
+          if (!msg || msg.sender !== 'customer') return;
+
+          // deduce parent chat doc id (path like chats/{uid}/messages/{msgId})
+          const pathParts = change.doc.ref.path.split('/');
+          const parentChatId = pathParts[1]; // expects ['chats','{uid}','messages','{msgId}']
+
+          // show browser notification if admin page is open
+          notifyAdminOfIncomingMessage(parentChatId, msg.name || '', msg.message);
+
+          // Optionally update global unread badge: we'll re-run loadChatUsersRealtime which recalculates unread counts
+          // but to make it instant, bump the small badge value:
+          const badge = document.getElementById('chat-notif');
+          if (badge) {
+            const current = badge.style.display === 'inline-block' ? Number(badge.textContent.replace('+','')) || 0 : 0;
+            updateGlobalNotifBadge(current + 1);
+          }
+        });
+      }, err => {
+        console.error('global messages watcher error', err);
+      });
+  } catch (err) {
+    // Older SDK / rules may prevent collectionGroup; swallow
+    console.warn('collectionGroup watcher not available or failed', err);
+  }
+}
+
+// Start the global watcher when admin UI exists
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    if (document.getElementById('chat-users')) {
+      // attach once
+      attachGlobalMessageWatcherForNotifications();
+    }
+  });
+}
+
+// Small helper: escapeHtml used earlier in file; ensure it's available. If not, fallback:
+if (typeof escapeHtml !== 'function') {
+  function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+}
+
+// ----------------- End chat upgrade -----------------
 
 
 /* ---------- Auth: signup/login/logout ---------- */
@@ -734,6 +1063,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
