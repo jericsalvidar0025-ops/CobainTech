@@ -29,28 +29,6 @@ window.addEventListener('load', () => {
   initCustomerOrders(); // Customer orders listener
 });
 /* ---------------------- Chat (compat SDK) ---------------------- */
-/*
-  Consistent, compat-style chat:
-  - Customer messages stored at: chats/{userId}/messages
-  - Admin lists users from chats collection and opens chats at chats/{userId}/messages
-  - Uses firebase.firestore.FieldValue.serverTimestamp()
-  - Matches DOM ids in index.html and admin (1).html
-*/
-
-// ------------------ INIT CHAT ------------------
-// ---------------------- CHAT: High-end upgrade (replace existing chat functions) ----------------------
-
-/*
-Structure used:
-- chats (collection)
-  - {userId} (doc) { userId, name, updatedAt, unreadForAdmin: bool, typing: bool }
-    - messages (subcollection)
-      - auto-id { sender: 'customer'|'admin', message: string, timestamp: Timestamp, readByAdmin: bool, readByCustomer: bool }
-
-Notes:
-- Uses compat SDK (firebase.firestore(), firebase.auth()) — matches your project.
-- Make sure user docs (users collection) have a 'username' or 'name' field for fallback.
-*/
 
 const TYPING_DEBOUNCE_MS = 1200;
 let typingTimer = null;
@@ -150,6 +128,18 @@ function startCustomerChat(userId, displayName = null) {
   window.addEventListener('beforeunload', () => {
     db.collection('chats').doc(userId).set({ typing: false }, { merge: true });
   });
+  
+}
+// ✅ Customer Side Chat Toggle (fix for "toggleChatBox is not defined")
+function toggleChatBox() {
+  const chatBox = document.getElementById("chat-box");
+  if (!chatBox) return;
+
+  if (chatBox.style.display === "flex" || chatBox.style.display === "") {
+    chatBox.style.display = "none";
+  } else {
+    chatBox.style.display = "flex";
+  }
 }
 
 function appendCustomerMessageToUI(container, m) {
@@ -1063,6 +1053,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
