@@ -142,6 +142,33 @@ label { display:block; margin-bottom:6px; font-weight:600; }
 .bubble.admin { background:#2f80ed; color:#fff; align-self:flex-end; }
 .msg-time { font-size:0.75rem;color:#9aa0a6;margin-top:6px; align-self:flex-end; }
 
+/* Chat user row styles */
+.user-btn {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:10px;
+  background:#111;
+  border-radius:8px;
+  border:1px solid #1b1b1b;
+  color:#eee;
+  cursor:pointer;
+  text-align:left;
+}
+.user-btn:hover { background:#17202a; transform:translateY(-1px); }
+.user-avatar {
+  width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:#3498db;flex-shrink:0;
+}
+.user-meta { display:flex; flex-direction:column; align-items:flex-start; min-width:0; }
+.user-name { font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; }
+.user-last { font-size:0.85rem; color:#9b9b9b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; }
+.user-badge { margin-left:auto; background:#e74c3c; color:#fff; font-size:0.8rem; padding:4px 8px; border-radius:999px; }
+.user-typing { font-size:0.8rem;color:#9b9b9b;margin-top:4px; }
+.bubble-admin { align-self:flex-end; background:#3498db; color:#fff; padding:8px 12px; border-radius:12px; max-width:75%; }
+.bubble-customer { align-self:flex-start; background:#1f2226; color:#fff; padding:8px 12px; border-radius:12px; max-width:75%; }
+.msg-time { font-size:0.75rem; color:#9b9b9b; margin-top:4px; align-self:flex-end; }
+
+
 </style>
 </head>
 <body>
@@ -242,60 +269,61 @@ window.addEventListener('load', () => {
     </section>
 
 <!-- ---------------- Admin Chat (UPGRADED) ---------------- -->
-<section id="tab-chat" style="display:none">
-  <div class="card" style="padding:12px;height:600px;display:flex;flex-direction:column;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <h3>Customer Messages</h3>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="chat-search" placeholder="Search users or messages..." style="padding:8px 12px;border-radius:10px;border:1px solid #333;background:#0b0c0e;color:#eee;width:300px">
-        <div style="position:relative">
-          <button onclick="showTab('chat')" style="background:#3498db;color:#fff;border:none;padding:8px 12px;border-radius:8px;">Refresh</button>
-          <span id="chat-notif" style="position:absolute;right:-8px;top:-8px;background:#e74c3c;color:#fff;padding:4px 7px;border-radius:999px;display:none;font-size:0.8rem;"></span>
-        </div>
+<section id="tab-chat" style="display:none;">
+  <div class="card" style="padding:14px; display:flex; flex-direction:column; height:600px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;">
+      <h3 style="margin:0">Customer Messages</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input id="chat-search" placeholder="Search customers..." style="padding:8px 10px; border-radius:8px; border:1px solid #333; background:#0b0c0e; color:#eee;" />
+        <button onclick="showTab('products')" class="btn small">Back</button>
       </div>
     </div>
 
-    <div style="display:flex;flex:1;gap:12px;overflow:hidden">
-      <!-- Users list -->
-      <div style="width:320px;background:#0f1113;border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:8px;overflow:auto">
-        <div style="font-size:.9rem;color:#aaa;padding:6px 8px;border-radius:8px">Active chats</div>
-        <div id="chat-users" style="display:flex;flex-direction:column;gap:8px"></div>
-        <div style="margin-top:auto;color:#666;font-size:0.85rem;padding:6px 8px">Tip: click a user to open the conversation</div>
+    <div style="display:flex; gap:12px; flex:1; min-height:0; overflow:hidden;">
+      <!-- left: users -->
+      <div id="chat-users" style="width:300px; background:#0f1113; border-radius:12px; padding:8px; overflow:auto; display:flex; flex-direction:column; gap:8px;">
+        <!-- user rows are injected here -->
+        <div style="padding:12px;color:#999">Loading users…</div>
       </div>
 
-      <!-- Conversation -->
-      <div id="chat-panel" style="flex:1;display:flex;flex-direction:column;gap:8px">
-        <div id="chat-panel-header" style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:#0b0c0e;border-radius:10px;border:1px solid #222">
-          <div style="display:flex;align-items:center;gap:12px">
-            <div id="chat-panel-avatar" style="width:44px;height:44px;border-radius:50%;background:#3498db;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.0rem;color:#fff"></div>
+      <!-- right: chat panel -->
+      <div style="flex:1; display:flex; flex-direction:column; min-width:0; gap:10px;">
+        <div id="chat-panel-header" style="background:#0f1113; padding:12px; border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
+          <div style="display:flex;gap:12px;align-items:center;">
+            <div id="chat-avatar" style="width:48px;height:48px;border-radius:50%;background:#3498db;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;">U</div>
             <div>
-              <div id="chat-panel-name" style="font-weight:700"></div>
-              <div id="chat-panel-sub" style="font-size:0.85rem;color:#9aa0a6"></div>
+              <div id="chat-with" style="font-weight:700;color:#fff">Select a customer</div>
+              <div id="chat-last-seen" style="font-size:0.8rem;color:#9b9b9b">—</div>
             </div>
           </div>
 
-          <div style="display:flex;gap:8px;align-items:center">
-            <button id="mark-read-btn" class="btn small" style="background:#2ecc71;border:none;color:#fff;padding:6px 10px;border-radius:8px">Mark read</button>
-            <button onclick="closeChat()" class="btn small" style="background:#e74c3c;border:none;color:#fff;padding:6px 10px;border-radius:8px">Close</button>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="btn-call" class="btn small" onclick="startCallToSelectedUser()">📞 Call</button>
+            <button id="btn-hangup" class="btn small" style="display:none;background:#e74c3c;color:#fff" onclick="hangupCall()">Hang up</button>
           </div>
         </div>
 
-        <div id="chat-admin-messages" style="flex:1;overflow:auto;padding:12px;background:#0f1113;border-radius:10px;border:1px solid #222;display:flex;flex-direction:column;gap:8px"></div>
+        <div id="chat-admin-messages" style="flex:1; background:#070708; border-radius:8px; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px;">
+          <div style="color:#9b9b9b">Open a chat to view messages.</div>
+        </div>
 
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="quick-reply" style="width:220px;padding:8px;border-radius:10px;background:#111;border:1px solid #333;color:#eee">
-            <option value="">Quick replies...</option>
-            <option>Hi — thanks for reaching out! How can I help?</option>
-            <option>We received your order and it's being processed.</option>
-            <option>Can you share a photo of the issue?</option>
-          </select>
-          <input id="admin-chat-input" placeholder="Type a message..." style="flex:1;padding:10px 14px;border-radius:999px;border:1px solid #333;background:#0b0c0e;color:#eee" />
-          <button id="admin-send-btn" style="background:#3498db;color:#fff;border:none;padding:10px 16px;border-radius:999px">Send</button>
+        <div id="chat-typing" style="min-height:18px;color:#9b9b9b;font-size:0.9rem"></div>
+
+        <div style="display:flex; gap:8px;">
+          <input id="admin-chat-input" placeholder="Type a message..." style="flex:1; padding:10px 12px; border-radius:20px; border:1px solid #333; background:#0b0c0e; color:#eee;">
+          <button class="btn primary" onclick="adminSendChat()">Send</button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <button class="btn ghost" onclick="insertQuickReply('Hello! How can I help you today?')">Quick: Hello</button>
+          <button class="btn ghost" onclick="insertQuickReply('Your order is being processed. I will update you soon.')">Quick: Order update</button>
+          <button class="btn ghost" onclick="insertQuickReply('Can you share a photo of the issue?')">Quick: Ask photo</button>
         </div>
       </div>
     </div>
   </div>
 </section>
+
 
 
     <!-- Orders Tab -->
@@ -504,4 +532,5 @@ function showTab(tab){
 </script>
 </body>
 </html>
+
 
