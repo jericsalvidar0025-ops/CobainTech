@@ -244,7 +244,7 @@ function debounceCustomerTyping() {
 
 /* ----------- Admin Chat: enhanced logic (paste into script.js - replaces older admin chat functions) ----------- */
 
-let adminUsersUnsub = null;
+adminUsersUnsub = null;
 let adminMessagesUnsub = null;
 let currentAdminChatUser = null;
 let chatUsersCache = {}; // cache for quick lookups
@@ -1031,6 +1031,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
