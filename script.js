@@ -6,8 +6,6 @@ function debounce(fn, delay=200){ let t; return (...a)=>{ clearTimeout(t); t=set
 function q(sel){ return document.querySelector(sel); }
 function qAll(sel){ return document.querySelectorAll(sel); }
 function money(v){ return `₱${Number(v).toLocaleString()}`; }
-function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
-function debounce(fn,d=200){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),d); }; }
 function placeholderDataURL(text){ 
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='700'>
     <rect fill='#0b0c0e' width='100%' height='100%'/>
@@ -1033,6 +1031,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
