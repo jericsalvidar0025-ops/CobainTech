@@ -1,6 +1,8 @@
 /* script.js — CobainTech Firebase edition (updated full) */
 
 /* ---------- helpers ---------- */
+function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+function debounce(fn, delay=200){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),delay); }; }
 function q(sel){ return document.querySelector(sel); }
 function qAll(sel){ return document.querySelectorAll(sel); }
 function money(v){ return `₱${Number(v).toLocaleString()}`; }
@@ -242,258 +244,277 @@ function debounceCustomerTyping() {
   }, TYPING_DEBOUNCE_MS);
 }
 
-// ------------------- ADMIN side -------------------
+/* ----------- Admin Chat: enhanced logic (paste into script.js - replaces older admin chat functions) ----------- */
 
-// helper: render a single user row (avatar + name + unread badge)
-function renderChatUsersList(chatDocs, unreadMap = {}) {
+let adminUsersUnsub = null;
+let adminMessagesUnsub = null;
+let currentAdminChatUser = null;
+let chatUsersCache = {}; // cache for quick lookups
+
+// Helper: format time
+function fmtTime(ts) {
+  if (!ts) return '';
+  try { return ts.toDate().toLocaleString(); } catch(e) { return new Date(ts).toLocaleString(); }
+}
+
+// Build and render user list (called from snapshot)
+async function renderAdminUserList(snapshot) {
   const listEl = document.getElementById('chat-users');
   if (!listEl) return;
+  if (snapshot.empty) { listEl.innerHTML = '<div style="padding:12px;color:#ddd">No chat users yet.</div>'; return; }
 
-  // sort by updatedAt desc
-  chatDocs.sort((a,b) => {
-    const aa = a.updatedAt ? a.updatedAt.toMillis?.() || (new Date(a.updatedAt)).getTime() : 0;
-    const bb = b.updatedAt ? b.updatedAt.toMillis?.() || (new Date(b.updatedAt)).getTime() : 0;
-    return bb - aa;
+  // Build an array with last message preview & unread counts
+  const rows = [];
+  const docs = [];
+  snapshot.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+
+  // For performance, we'll fetch unread counts in parallel (limited to displayed docs)
+  const unreadPromises = docs.map(d => {
+    return db.collection('chats').doc(d.id).collection('messages')
+      .where('sender', '==', 'customer')
+      .where('readByAdmin', '==', false).get()
+      .then(s => ({ id: d.id, unread: s.size }))
+      .catch(() => ({ id: d.id, unread: 0 }));
   });
 
-  listEl.innerHTML = chatDocs.map(doc => {
-    const uid = doc.userId || doc.id;
-    const name = doc.name || doc.username || 'Customer';
-    const initials = (name.split(' ').map(p => p[0]).join('').slice(0,2) || 'U').toUpperCase();
-    const unread = unreadMap[uid] || 0;
-    const unreadHtml = unread > 0 ? `<span class="badge">${unread}</span>` : '';
+  const lastMsgPromises = docs.map(d => {
+    return db.collection('chats').doc(d.id).collection('messages')
+      .orderBy('timestamp', 'desc').limit(1).get()
+      .then(s => ({ id: d.id, last: s.empty ? null : s.docs[0].data() }))
+      .catch(()=>({ id:d.id, last: null }));
+  });
+
+  const unreadResults = await Promise.all(unreadPromises);
+  const lastResults = await Promise.all(lastMsgPromises);
+  const unreadMap = Object.fromEntries(unreadResults.map(x=>[x.id, x.unread]));
+  const lastMap = Object.fromEntries(lastResults.map(x=>[x.id, x.last]));
+
+  // Build HTML
+  const html = docs.map(d => {
+    const name = d.name || d.username || d.userId || d.id;
+    const initials = (name.split(' ').map(p=>p[0]).join('').slice(0,2) || 'U').toUpperCase();
+    const last = lastMap[d.id];
+    const preview = last ? (last.message.length>40 ? last.message.slice(0,37)+'...' : last.message) : 'No messages';
+    const ts = last && last.timestamp ? (last.timestamp.toDate ? last.timestamp.toDate().toLocaleString() : new Date(last.timestamp).toLocaleString()) : '';
+    const unread = unreadMap[d.id] || 0;
+    // cache some info
+    chatUsersCache[d.id] = { name, initials, preview, ts, unread };
+    // highlight if current user selected
+    const activeClass = (currentAdminChatUser === d.id) ? 'background:#18314a;border:1px solid #234455;' : '';
     return `
-      <button class="user-btn" data-uid="${uid}" onclick="openAdminChat('${uid}')">
-        <div class="avatar">${initials}</div>
-        <div style="flex:1; text-align:left; padding-left:8px;">
-          <div style="font-weight:600; color:#eee;">${escapeHtml(name)}</div>
-          <div style="font-size:0.8rem; color:#aaa;">${escapeHtml(doc.updatedAt ? (doc.updatedAt.toDate ? doc.updatedAt.toDate().toLocaleString() : new Date(doc.updatedAt).toLocaleString()) : '')}</div>
+      <button class="user-btn" data-uid="${d.id}" onclick="openAdminChat('${d.id}')"
+        style="${activeClass};display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;">
+        <div class="user-avatar" style="background:#2f80ed">${initials}</div>
+        <div class="user-meta">
+          <div class="user-name">${escapeHtml(name)}</div>
+          <div class="user-sub">${escapeHtml(preview)} · <span style="color:#6d7880">${escapeHtml(ts)}</span></div>
         </div>
-        ${unreadHtml}
+        ${unread>0?`<div class="user-unread">${unread}</div>`:''}
       </button>
     `;
   }).join('');
+  listEl.innerHTML = html;
+
+  // update global notif badge
+  const totalUnread = Object.values(unreadMap).reduce((s,n)=>s+n,0);
+  updateGlobalNotifBadge(totalUnread);
 }
 
-// load chat users realtime and compute unread counts
+// Listen to chats collection and render users
 function loadChatUsersRealtime() {
   const listEl = document.getElementById('chat-users');
   if (!listEl) return;
 
   if (adminUsersUnsub) { try { adminUsersUnsub(); } catch(e){} adminUsersUnsub = null; }
-  adminUsersUnsub = db.collection('chats').onSnapshot(async snap => {
-    if (snap.empty) {
-      listEl.innerHTML = '<div style="padding:12px;color:#ddd">No chat users yet.</div>';
-      updateGlobalNotifBadge(0);
-      return;
-    }
 
-    // gather docs
-    const docs = [];
-    snap.forEach(d => {
-      const data = d.data() || {};
-      docs.push({
-        id: d.id,
-        userId: d.id,
-        name: data.name || '',
-        updatedAt: data.updatedAt || null,
-        typing: data.typing || false
-      });
-    });
-
-    // compute unread counts per user (customer -> admin unread)
-    const unreadMap = {};
-    // We'll fetch unread counts in parallel
-    await Promise.all(docs.map(async doc => {
+  adminUsersUnsub = db.collection('chats')
+    .orderBy('updatedAt','desc')
+    .onSnapshot(async snap => {
       try {
-        const msgs = await db.collection('chats').doc(doc.userId)
-          .collection('messages')
-          .where('sender', '==', 'customer')
-          .where('readByAdmin', '==', false)
-          .get();
-        unreadMap[doc.userId] = msgs.size || 0;
-      } catch (err) {
-        unreadMap[doc.userId] = 0;
-      }
-    }));
-
-    // render list
-    renderChatUsersList(docs, unreadMap);
-
-    // update global notif badge
-    const totalUnread = Object.values(unreadMap).reduce((s,n)=>s+n,0);
-    updateGlobalNotifBadge(totalUnread);
-
-    // show typing indicator on each user row (small tweak): append typing class if doc.typing true
-    docs.forEach(d => {
-      const el = listEl.querySelector(`button[data-uid="${d.userId}"]`);
-      if (el) {
-        if (d.typing) {
-          el.classList.add('typing');
-          // optionally show small "typing..." text
-          let tEl = el.querySelector('.typing-ind');
-          if (!tEl) {
-            tEl = document.createElement('div');
-            tEl.className = 'typing-ind';
-            tEl.style.fontSize = '0.8rem'; tEl.style.color = '#9b9b9b';
-            tEl.textContent = 'typing...';
-            el.querySelector('div').appendChild(tEl);
-          }
-        } else {
-          el.classList.remove('typing');
-          const tEl = el.querySelector('.typing-ind'); if (tEl) tEl.remove();
-        }
-      }
+        await renderAdminUserList(snap);
+      } catch (err) { console.error('renderAdminUserList error', err); }
+    }, err => {
+      console.error('loadChatUsersRealtime error', err);
+      listEl.innerHTML = '<div style="padding:12px;color:#f66">Failed to load users.</div>';
     });
-  }, err => {
-    console.error('loadChatUsersRealtime error', err);
-    listEl.innerHTML = '<div style="padding:12px;color:#f66">Failed to load users.</div>';
-  });
+
+  // enable search
+  const search = document.getElementById('chat-search');
+  if (search) {
+    search.addEventListener('input', debounce(()=> {
+      // simple client-side filter using cache
+      const q = search.value.trim().toLowerCase();
+      const buttons = document.querySelectorAll('#chat-users .user-btn');
+      buttons.forEach(btn => {
+        const uid = btn.getAttribute('data-uid');
+        const info = chatUsersCache[uid] || {};
+        const match = (info.name||'').toLowerCase().includes(q) || (info.preview||'').toLowerCase().includes(q) || uid.includes(q);
+        btn.style.display = match ? 'flex' : 'none';
+      });
+    }, 200));
+  }
 }
 
-// open admin chat and attach listener to subcollection
+// Open a chat (admin)
 async function openAdminChat(userId) {
   currentAdminChatUser = userId;
+  document.getElementById('chat-admin-messages').innerHTML = '<div style="padding:12px;color:#ddd">Loading messages…</div>';
+  const chatPanelName = document.getElementById('chat-panel-name');
+  const chatPanelAvatar = document.getElementById('chat-panel-avatar');
+  const chatPanelSub = document.getElementById('chat-panel-sub');
 
-  // show chat UI
-  const boxWrap = document.getElementById('chat-admin-box');
-  if (boxWrap) boxWrap.style.display = 'flex';
-  const withEl = document.getElementById('chat-with');
-  withEl.textContent = 'Chat with: ...';
-
-  // fetch chat doc to show name
   try {
     const doc = await db.collection('chats').doc(userId).get();
-    const data = doc.data() || {};
-    withEl.textContent = 'Chat with: ' + (data.name || doc.id);
+    const data = doc.exists ? doc.data() : {};
+    const name = data.name || 'Customer';
+    chatPanelName.textContent = name;
+    chatPanelAvatar.textContent = (name.split(' ').map(p=>p[0]).join('').slice(0,2) || 'U').toUpperCase();
+    chatPanelSub.textContent = data.updatedAt ? fmtTime(data.updatedAt) : '';
   } catch (err) {
     console.error('openAdminChat fetch error', err);
   }
 
-  // mark unread -> read for this user
+  // mark unread as read and start listening messages
   await markMessagesReadForAdmin(userId);
-
-  // attach message listener
   attachAdminMessagesListener(userId);
+
+  // wire mark-read button
+  const markBtn = document.getElementById('mark-read-btn');
+  if (markBtn) markBtn.onclick = () => markMessagesReadForAdmin(userId);
 }
 
-// attach admin messages listener (single listener only)
+// Attach listener to messages subcollection
 function attachAdminMessagesListener(userId) {
-  // remove previous
   if (adminMessagesUnsub) { try { adminMessagesUnsub(); } catch(e){} adminMessagesUnsub = null; }
-
-  const messagesBox = document.getElementById('chat-admin-messages');
-  if (!messagesBox) return;
-  messagesBox.innerHTML = '<div style="padding:8px;color:#ddd">Loading messages…</div>';
-
-  const colRef = db.collection('chats').doc(userId).collection('messages');
-  const q = colRef.orderBy('timestamp', 'asc');
+  const box = document.getElementById('chat-admin-messages');
+  if (!box) return;
+  const q = db.collection('chats').doc(userId).collection('messages').orderBy('timestamp','asc');
 
   adminMessagesUnsub = q.onSnapshot(snapshot => {
-    messagesBox.innerHTML = '';
+    box.innerHTML = '';
     if (snapshot.empty) {
-      messagesBox.innerHTML = '<div style="padding:12px;color:#ddd">No messages yet.</div>';
+      box.innerHTML = '<div style="padding:12px;color:#ddd">No messages yet.</div>';
       return;
     }
 
     snapshot.forEach(doc => {
       const m = doc.data();
-      appendAdminMessageToUI(messagesBox, m);
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'column';
+      wrapper.style.alignItems = (m.sender === 'admin') ? 'flex-end' : 'flex-start';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble ' + (m.sender === 'admin' ? 'admin' : 'customer');
+      bubble.textContent = m.message;
+
+      const t = document.createElement('div');
+      t.className = 'msg-time';
+      t.textContent = m.timestamp ? (m.timestamp.toDate ? m.timestamp.toDate().toLocaleString() : new Date(m.timestamp).toLocaleString()) : '';
+
+      wrapper.appendChild(bubble);
+      wrapper.appendChild(t);
+      box.appendChild(wrapper);
     });
 
-    messagesBox.scrollTo({ top: messagesBox.scrollHeight, behavior: 'smooth' });
+    // autoscroll
+    box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
   }, err => {
     console.error('attachAdminMessagesListener error', err);
-    messagesBox.innerHTML = '<div style="padding:12px;color:#f66">Failed to load messages.</div>';
+    box.innerHTML = '<div style="padding:12px;color:#f66">Failed to load messages.</div>';
   });
+
+  // when messages arrive, show browser notification for new customer messages
+  // We'll use a collectionGroup watcher elsewhere for notifications; here we keep UI listening simple.
 }
 
-function appendAdminMessageToUI(container, m) {
-  const time = m.timestamp ? m.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-  const wrap = document.createElement('div');
-  wrap.style.marginBottom = '8px';
-  wrap.style.display = 'flex';
-  wrap.style.flexDirection = 'column';
-  wrap.style.alignItems = (m.sender === 'admin') ? 'flex-end' : 'flex-start';
-
-  const bubble = document.createElement('div');
-  bubble.textContent = m.message;
-  bubble.className = 'bubble ' + (m.sender === 'admin' ? 'admin' : 'customer');
-  bubble.style.padding = '8px 12px';
-  bubble.style.borderRadius = '12px';
-  bubble.style.maxWidth = '78%';
-  bubble.style.wordBreak = 'break-word';
-
-  const timeEl = document.createElement('div');
-  timeEl.className = 'time';
-  timeEl.textContent = time;
-
-  wrap.appendChild(bubble);
-  wrap.appendChild(timeEl);
-  container.appendChild(wrap);
-}
-
-// admin sends message
+// Admin send message (hooked to Send button)
 function adminSendChat() {
   const input = document.getElementById('admin-chat-input');
   if (!input) return;
   const text = input.value.trim();
   if (!text) return;
 
-  const userId = currentAdminChatUser;
-  if (!userId) return alert('Select a user first');
+  const uid = currentAdminChatUser;
+  if (!uid) { alert('Select a user first'); return; }
 
-  const chatDocRef = db.collection('chats').doc(userId);
-  const messagesRef = chatDocRef.collection('messages');
+  const chatRef = db.collection('chats').doc(uid);
+  const messagesRef = chatRef.collection('messages');
 
-  // add message and clear unread flag for admin
   messagesRef.add({
     sender: 'admin',
     message: text,
     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
     readByAdmin: true,
     readByCustomer: false
-  })
-  .then(() => {
-    // update parent doc: not unread for admin
-    return chatDocRef.set({
-      unreadForAdmin: false,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  })
-  .then(() => {
+  }).then(() => {
+    // mark parent doc updated
+    chatRef.set({ unreadForAdmin: false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
     input.value = '';
-  })
-  .catch(err => {
+  }).catch(err => {
     console.error('adminSendChat error', err);
-    alert('Failed to send message.');
+    alert('Failed to send message. Check console.');
   });
 }
 
-// mark messages as read by admin when admin opens chat (batch)
+// mark customer messages as read by admin
 async function markMessagesReadForAdmin(userId) {
+  if (!userId) return;
   try {
     const q = db.collection('chats').doc(userId).collection('messages')
-      .where('sender', '==', 'customer')
-      .where('readByAdmin', '==', false);
+      .where('sender','==','customer')
+      .where('readByAdmin','==',false);
     const snap = await q.get();
     if (snap.empty) {
-      // still ensure parent flag is false
       await db.collection('chats').doc(userId).set({ unreadForAdmin: false }, { merge: true });
       return;
     }
     const batch = db.batch();
     snap.forEach(d => batch.update(d.ref, { readByAdmin: true }));
-    // also update parent doc
-    const chatRef = db.collection('chats').doc(userId);
-    batch.update(chatRef, { unreadForAdmin: false });
+    batch.update(db.collection('chats').doc(userId), { unreadForAdmin: false });
     await batch.commit();
+    // refresh list
+    // small delay to allow backend index updates then re-render list by re-triggering load state
+    setTimeout(() => {
+      if (adminUsersUnsub) { /* nothing, snapshot already active */ }
+      else loadChatUsersRealtime();
+    }, 300);
   } catch (err) {
     console.error('markMessagesReadForAdmin error', err);
   }
 }
 
-// global notif badge update (top-level)
+// close chat panel
+function closeChat() {
+  currentAdminChatUser = null;
+  if (adminMessagesUnsub) { try { adminMessagesUnsub(); } catch(e){} adminMessagesUnsub = null; }
+  const boxWrap = document.getElementById('chat-admin-box');
+  if (boxWrap) boxWrap.style.display = 'none';
+  document.getElementById('chat-admin-messages').innerHTML = '';
+  // re-render users to clear active class
+  db.collection('chats').get().then(snap => renderAdminUserList(snap)).catch(()=>{});
+}
+
+// quick reply wiring
+(function wireQuickReplyAndSend(){
+  // Send button
+  document.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'admin-send-btn') adminSendChat();
+  });
+  // Quick reply selection
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.id === 'quick-reply') {
+      const val = e.target.value;
+      if (val) {
+        const input = document.getElementById('admin-chat-input');
+        input.value = val;
+      }
+      e.target.selectedIndex = 0;
+    }
+  });
+})();
+
+// global unread badge update helper (expects an element with id 'chat-notif')
 function updateGlobalNotifBadge(count) {
   const badge = document.getElementById('chat-notif');
   if (!badge) return;
@@ -506,83 +527,42 @@ function updateGlobalNotifBadge(count) {
   }
 }
 
-// Browser Notification for admin (only when admin not focused or chat for user not open)
-function notifyAdminOfIncomingMessage(userId, name, message) {
+/* Optional: collectionGroup listener for global notifications (customer messages)
+   This is best-effort (may require Firestore indexes / billing); keeps admin alerted even when not on the page.
+*/
+function startGlobalNotificationWatcher() {
   try {
-    if (!("Notification" in window)) return;
-    if (Notification.permission !== "granted") return;
-
-    const isActive = (document.visibilityState === 'visible') && (currentAdminChatUser === userId);
-    if (isActive) return; // admin is already viewing this chat
-
-    const n = new Notification(name || 'Customer', {
-      body: message.length > 100 ? message.slice(0, 97) + '...' : message,
-      tag: `chat-${userId}`,
-      renotify: true
-    });
-    n.onclick = () => {
-      window.focus();
-      openAdminChat(userId);
-      n.close();
-    };
-  } catch (err) { /* ignore */ }
-}
-
-// Listen for new customer messages globally (for notifications & updating unread counts instantly)
-function attachGlobalMessageWatcherForNotifications() {
-  // Listen to all chats' messages added events using collectionGroup
-  // Note: collectionGroup listeners are supported in Firestore. Make sure your billing plan supports it.
-  try {
-    db.collectionGroup('messages')
-      .orderBy('timestamp', 'desc')
-      .limit(100) // limit to recent events to reduce noise
-      .onSnapshot(snap => {
-        snap.docChanges().forEach(change => {
-          if (change.type !== 'added') return;
-          const msg = change.doc.data();
-          // We only care about customer -> admin messages
-          if (!msg || msg.sender !== 'customer') return;
-
-          // deduce parent chat doc id (path like chats/{uid}/messages/{msgId})
-          const pathParts = change.doc.ref.path.split('/');
-          const parentChatId = pathParts[1]; // expects ['chats','{uid}','messages','{msgId}']
-
-          // show browser notification if admin page is open
-          notifyAdminOfIncomingMessage(parentChatId, msg.name || '', msg.message);
-
-          // Optionally update global unread badge: we'll re-run loadChatUsersRealtime which recalculates unread counts
-          // but to make it instant, bump the small badge value:
-          const badge = document.getElementById('chat-notif');
-          if (badge) {
-            const current = badge.style.display === 'inline-block' ? Number(badge.textContent.replace('+','')) || 0 : 0;
-            updateGlobalNotifBadge(current + 1);
+    db.collectionGroup('messages').orderBy('timestamp','desc').limit(50).onSnapshot(snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const m = change.doc.data();
+        if (m.sender !== 'customer') return;
+        const pathParts = change.doc.ref.path.split('/');
+        const uid = pathParts[1];
+        // show browser notification
+        try {
+          if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== 'visible') {
+            const n = new Notification(m.name || 'Customer', { body: m.message.length>100?m.message.slice(0,97)+'...':m.message, tag: 'chat-'+uid });
+            n.onclick = () => { window.focus(); openAdminChat(uid); n.close(); };
           }
-        });
-      }, err => {
-        console.error('global messages watcher error', err);
+        } catch(e){}
       });
-  } catch (err) {
-    // Older SDK / rules may prevent collectionGroup; swallow
-    console.warn('collectionGroup watcher not available or failed', err);
+    }, err => console.warn('global watcher error', err));
+  } catch(e) { console.warn('collectionGroup watcher not available', e); }
+}
+
+// start the global watcher when chat UI exists
+window.addEventListener('load', () => {
+  if (document.getElementById('chat-users')) {
+    loadChatUsersRealtime();
+    startGlobalNotificationWatcher();
+    // wire send action on Enter inside message input
+    const adminInput = document.getElementById('admin-chat-input');
+    if (adminInput) adminInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); adminSendChat(); }
+    });
   }
-}
-
-// Start the global watcher when admin UI exists
-if (typeof window !== 'undefined') {
-  window.addEventListener('load', () => {
-    if (document.getElementById('chat-users')) {
-      // attach once
-      attachGlobalMessageWatcherForNotifications();
-    }
-  });
-}
-
-// Small helper: escapeHtml used earlier in file; ensure it's available. If not, fallback:
-if (typeof escapeHtml !== 'function') {
-  function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
-}
-
-// ----------------- End chat upgrade -----------------
+});
 
 
 /* ---------- Auth: signup/login/logout ---------- */
@@ -1053,6 +1033,7 @@ async function advanceOrder(id){
 
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
+
 
 
 
