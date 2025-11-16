@@ -1,4 +1,9 @@
-/* script.js — CobainTech Firebase edition (updated full) */
+/* script.js — CobainTech merged (working base + upgraded chat + call system)
+   - Contains: helpers, products, cart, checkout, auth, admin, orders
+   - Replaces chat functions with upgraded real-time chat (usernames, unread badges, typing, notifications)
+   - Adds a minimal WebRTC call feature (Firestore signaling) for demo/testing
+   IMPORTANT: Calls require HTTPS (or localhost) and TURN servers may be needed for production NAT traversal.
+*/
 
 /* ---------- helpers ---------- */
 function q(sel){ return document.querySelector(sel); }
@@ -25,34 +30,63 @@ window.addEventListener('load', () => {
   bindAuthState();
   initIndex();
   initAdmin();
-  initChat();
+  initChat(); // upgraded chat initialization
   initCustomerOrders(); // Customer orders listener
 });
-/* ---------------------- Chat (compat SDK) ---------------------- */
+
+/* ---------- Constants & state for chat/calls ---------- */
+const TYPING_DEBOUNCE_MS = 1200;
+let typingTimer = null;
+let customerChatUnsub = null;
+let adminUsersUnsub = null;
+let adminMessagesUnsub = null;
+let currentAdminChatUser = null;
+let chatUsersCache = {}; // cache user info for admin list
+
+/* ---------- WebRTC call state ---------- */
+const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }; // add TURN servers for production
+let localStream = null;
+let remoteStream = null;
+let pc = null;
+let currentCallId = null;
+
+/* ---------------------- Chat (upgraded: names, unread, typing, notifications) ---------------------- */
+
 /*
-  Consistent, compat-style chat:
-  - Customer messages stored at: chats/{userId}/messages
-  - Admin lists users from chats collection and opens chats at chats/{userId}/messages
-  - Uses firebase.firestore.FieldValue.serverTimestamp()
-  - Matches DOM ids in index.html and admin (1).html
+Data model:
+- chats (collection)
+  - {userId} (doc) { userId, name, updatedAt, unreadForAdmin: bool, typing: bool }
+    - messages (subcollection)
+      - {auto-id} { sender: 'customer'|'admin', message: string, timestamp: Timestamp, readByAdmin: bool, readByCustomer: bool }
+
+Notes:
+- Uses compat SDK (firebase.auth(), firebase.firestore()) as in your project.
+- Make sure 'users' collection contains username fields (optional) for fallback.
 */
 
-// ------------------ INIT CHAT ------------------
-function initChat() {
+// initChat: sets up listeners for customer (store) and admin (dashboard)
+function initChat(){
   auth.onAuthStateChanged(user => {
-    // ----------------- CUSTOMER (STORE) -----------------
-    if (document.getElementById("chat-messages")) {
-      if (user) {
-        startCustomerChat(user.uid, user.displayName || 'You');
-      } else {
-        const box = document.getElementById("chat-messages");
+    // Store (customer) view
+    if (document.getElementById('chat-messages')) {
+      if (user) startCustomerChat(user.uid, user.displayName || null);
+      else {
+        const box = document.getElementById('chat-messages');
         if (box) box.innerHTML = `<div style="padding:12px;color:#ddd">Please login to chat with us.</div>`;
       }
     }
 
-    // ----------------- ADMIN -----------------
-    if (document.getElementById("chat-users")) {
+    // Admin view
+    if (document.getElementById('chat-users')) {
       loadChatUsersRealtime();
+      // request permission for browser notifications
+      if ("Notification" in window && Notification.permission !== 'granted') {
+        Notification.requestPermission().catch(()=>{});
+      }
+      // start watcher for new messages (for notifications and global badge)
+      startGlobalNotificationWatcher();
+      // listen for incoming call requests (if admin)
+      listenForCallRequests();
     }
   });
 
@@ -65,208 +99,620 @@ function initChat() {
         sendChat();
       }
     });
-  }
-}
-
-// ----------------- TOGGLE CHAT BOX -----------------
-function toggleChatBox() {
-  const box = document.getElementById("chat-box");
-  if (!box) return;
-  box.style.display = box.style.display === "none" || box.style.display === "" ? "flex" : "none";
-}
-
-// ----------------- CUSTOMER CHAT -----------------
-let customerChatUnsub = null;
-
-function startCustomerChat(userId, userName = 'You') {
-  if (customerChatUnsub) {
-    try { customerChatUnsub(); } catch(e){}
-    customerChatUnsub = null;
+    chatInputEl.addEventListener('input', debounceCustomerTyping);
   }
 
-  const box = document.getElementById("chat-messages");
-  if (!box) return;
-  box.innerHTML = `<div style="padding:12px;color:#ddd">Loading messages…</div>`;
-
-  const colRef = db.collection('chats').doc(userId).collection('messages');
-  const q = colRef.orderBy('timestamp', 'asc');
-
-  customerChatUnsub = q.onSnapshot(snapshot => {
-    box.innerHTML = '';
-    if (snapshot.empty) {
-      box.innerHTML = `<div style="padding:12px;color:#ddd">No messages yet. Say hi 👋</div>`;
-      return;
+  // Wire admin send Enter
+  const adminInput = document.getElementById('admin-chat-input');
+  if (adminInput) adminInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      adminSendChat();
     }
-
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const time = data.timestamp ? data.timestamp.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
-      const wrap = document.createElement('div');
-      wrap.style.marginBottom = '8px';
-      wrap.style.textAlign = (data.sender === 'customer') ? 'right' : 'left';
-
-      const bubble = document.createElement('span');
-      bubble.textContent = data.message;
-      bubble.style.display = 'inline-block';
-      bubble.style.padding = '8px 12px';
-      bubble.style.borderRadius = '12px';
-      bubble.style.maxWidth = '78%';
-      bubble.style.wordBreak = 'break-word';
-      bubble.style.background = (data.sender === 'customer') ? '#3498db' : '#444';
-      bubble.style.color = '#fff';
-
-      const timeEl = document.createElement('div');
-      timeEl.textContent = time;
-      timeEl.style.fontSize = '0.75rem';
-      timeEl.style.opacity = '0.7';
-      timeEl.style.marginTop = '4px';
-
-      wrap.appendChild(bubble);
-      wrap.appendChild(timeEl);
-      box.appendChild(wrap);
-    });
-
-    box.scrollTop = box.scrollHeight;
   });
 }
 
+/* ---------- CUSTOMER-side chat ---------- */
+function startCustomerChat(userId, displayName = null) {
+  if (customerChatUnsub) { try { customerChatUnsub(); } catch(e){} customerChatUnsub = null; }
+
+  const messagesBox = document.getElementById('chat-messages');
+  if (!messagesBox) return;
+
+  // Ensure parent chat doc exists
+  db.collection('chats').doc(userId).set({
+    userId,
+    name: displayName || '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).catch(err => console.error('init chat doc failed', err));
+
+  const colRef = db.collection('chats').doc(userId).collection('messages');
+  const q = colRef.orderBy('timestamp','asc');
+
+  customerChatUnsub = q.onSnapshot(snapshot => {
+    messagesBox.innerHTML = '';
+    if (snapshot.empty) {
+      messagesBox.innerHTML = `<div style="padding:12px;color:#ddd">No messages yet. Say hi 👋</div>`;
+      return;
+    }
+    snapshot.forEach(doc => {
+      const m = doc.data();
+      appendCustomerMessageToUI(messagesBox, m);
+    });
+
+    // mark admin messages as read by customer
+    markMessagesReadForCustomer(userId).catch(()=>{});
+    messagesBox.scrollTo({ top: messagesBox.scrollHeight, behavior: 'smooth' });
+  }, err => {
+    console.error('customer messages listener error', err);
+    messagesBox.innerHTML = `<div style="padding:12px;color:#f66">Failed to load messages.</div>`;
+  });
+
+  window.addEventListener('beforeunload', () => {
+    db.collection('chats').doc(userId).set({ typing: false }, { merge: true }).catch(()=>{});
+  });
+}
+
+function appendCustomerMessageToUI(container, m) {
+  const time = m.timestamp ? m.timestamp.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+  const wrap = document.createElement('div');
+  wrap.style.marginBottom = '8px';
+  wrap.style.textAlign = (m.sender === 'customer') ? 'right' : 'left';
+
+  const bubble = document.createElement('span');
+  bubble.textContent = m.message;
+  bubble.style.display = 'inline-block';
+  bubble.style.padding = '8px 12px';
+  bubble.style.borderRadius = '12px';
+  bubble.style.maxWidth = '78%';
+  bubble.style.wordBreak = 'break-word';
+  bubble.style.background = (m.sender === 'customer') ? '#3498db' : '#444';
+  bubble.style.color = '#fff';
+
+  const timeEl = document.createElement('div');
+  timeEl.textContent = time;
+  timeEl.style.fontSize = '0.75rem';
+  timeEl.style.opacity = '0.7';
+  timeEl.style.marginTop = '4px';
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(timeEl);
+  container.appendChild(wrap);
+}
+
+async function markMessagesReadForCustomer(userId) {
+  const msgsSnap = await db.collection('chats').doc(userId).collection('messages')
+    .where('sender','==','admin')
+    .where('readByCustomer','==',false)
+    .get();
+  if (msgsSnap.empty) return;
+  const batch = db.batch();
+  msgsSnap.forEach(d => batch.update(d.ref, { readByCustomer: true }));
+  await batch.commit();
+}
+
 function sendChat() {
-  const input = document.getElementById("chat-input");
+  const input = document.getElementById('chat-input');
+  if (!input) return;
   const message = input.value.trim();
   if (!message) return;
 
   const user = firebase.auth().currentUser;
-  if (!user) return alert("Please login to chat.");
+  if (!user) { alert('Please login to chat.'); return; }
 
-  const chatRef = db.collection("chats").doc(user.uid);
+  const chatDocRef = db.collection('chats').doc(user.uid);
+  const messagesRef = chatDocRef.collection('messages');
+  const nameToSave = user.displayName || (user.email ? user.email.split('@')[0] : 'Customer');
 
-  chatRef.set({
+  chatDocRef.set({
     userId: user.uid,
-    name: user.displayName || 'Customer',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    name: nameToSave,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    unreadForAdmin: true
   }, { merge: true })
-  .then(() => chatRef.collection("messages").add({
-    sender: "customer",
-    message: message,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  .then(() => messagesRef.add({
+    sender: 'customer',
+    message,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    readByAdmin: false,
+    readByCustomer: true
   }))
-  .then(() => { input.value = ''; })
-  .catch(err => console.error("Failed to send chat:", err));
+  .then(() => {
+    input.value = '';
+    // collapse typing
+    chatDocRef.set({ typing: false }, { merge: true }).catch(()=>{});
+  })
+  .catch(err => {
+    console.error('sendChat error', err);
+    alert('Failed to send message. Check console.');
+  });
 }
 
-// ----------------- ADMIN CHAT -----------------
-let adminUsersUnsub = null;
-let adminMessagesUnsub = null;
-let currentAdminChatUser = null;
+function debounceCustomerTyping() {
+  const user = firebase.auth().currentUser;
+  if (!user) return;
+  const chatDocRef = db.collection('chats').doc(user.uid);
+  chatDocRef.set({ typing: true }, { merge: true }).catch(()=>{});
+  if (typingTimer) clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    chatDocRef.set({ typing: false }, { merge: true }).catch(()=>{});
+  }, TYPING_DEBOUNCE_MS);
+}
 
-function loadChatUsersRealtime() {
-  const listEl = document.getElementById('chat-users');
-  if (!listEl) return;
+/* ---------- ADMIN-side chat (UI + functions) ---------- */
 
-  if (adminUsersUnsub) { try { adminUsersUnsub(); } catch(e){} adminUsersUnsub=null; }
+// Helper to format timestamp safely
+function fmtTime(ts){ if(!ts) return ''; try{ return ts.toDate().toLocaleString(); } catch(e){ return new Date(ts).toLocaleString(); } }
 
-  adminUsersUnsub = db.collection('chats').onSnapshot(snapshot => {
-    if (snapshot.empty) {
-      listEl.innerHTML = '<div style="padding:8px;color:#ddd">No chat users yet.</div>';
-      return;
-    }
+// Render admin user list (with last message preview, unread count, initials avatar)
+async function renderAdminUserList(snapshot){
+  const listEl = document.getElementById('chat-users'); if(!listEl) return;
+  if (snapshot.empty) {
+    listEl.innerHTML = '<div style="padding:12px;color:#ddd">No chat users yet.</div>';
+    updateGlobalNotifBadge(0);
+    return;
+  }
 
-    const html = [];
-    snapshot.forEach(doc => {
-      const userId = doc.id;
-      const userName = doc.data().name || 'Customer';
-      html.push(`<button class="btn small" style="margin-bottom:6px;display:block;width:100%;text-align:left" onclick="openAdminChat('${userId}')">${userName}</button>`);
+  const docs = [];
+  snapshot.forEach(d => docs.push({ id: d.id, ...d.data() }));
+
+  // parallel fetch unread counts & last message per chat
+  const unreadPromises = docs.map(d => db.collection('chats').doc(d.id).collection('messages')
+                                      .where('sender','==','customer').where('readByAdmin','==',false).get()
+                                      .then(s => ({ id: d.id, unread: s.size })).catch(()=>({id:d.id, unread:0})));
+  const lastPromises = docs.map(d => db.collection('chats').doc(d.id).collection('messages')
+                                      .orderBy('timestamp','desc').limit(1).get()
+                                      .then(s => ({ id: d.id, last: s.empty ? null : s.docs[0].data() })).catch(()=>({id:d.id,last:null})));
+
+  const unreadResults = await Promise.all(unreadPromises);
+  const lastResults = await Promise.all(lastPromises);
+  const unreadMap = Object.fromEntries(unreadResults.map(x => [x.id, x.unread]));
+  const lastMap = Object.fromEntries(lastResults.map(x => [x.id, x.last]));
+
+  const html = docs.map(d => {
+    const name = d.name || d.username || d.userId || d.id;
+    const initials = (name.split(' ').map(p => p[0]).join('').slice(0,2) || 'U').toUpperCase();
+    const last = lastMap[d.id];
+    const preview = last ? (last.message.length > 40 ? last.message.slice(0,37) + '...' : last.message) : 'No messages';
+    const ts = last && last.timestamp ? (last.timestamp.toDate ? last.timestamp.toDate().toLocaleString() : new Date(last.timestamp).toLocaleString()) : '';
+    const unread = unreadMap[d.id] || 0;
+    chatUsersCache[d.id] = { name, initials, preview, ts, unread };
+    const activeStyle = (currentAdminChatUser === d.id) ? 'background:#18314a;border:1px solid #234455;' : '';
+    return `
+      <div class="chat-user-row" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;${activeStyle}" data-uid="${d.id}">
+        <div style="width:44px;height:44px;border-radius:50%;background:#2f80ed;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;color:#eee">${escapeHtml(name)}</div>
+          <div style="font-size:0.85rem;color:#9aa0a6">${escapeHtml(preview)} · <span style="color:#6d7880">${escapeHtml(ts)}</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          ${unread>0?`<div class="user-unread" style="background:#e74c3c;color:#fff;padding:4px 8px;border-radius:999px;font-weight:700">${unread}</div>`:''}
+          <div style="display:flex;gap:6px">
+            <button class="btn small" onclick="openAdminChat('${d.id}')">Open</button>
+            <button class="btn small ghost" onclick="startCallAsAdmin('${d.id}')">Call</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  listEl.innerHTML = html;
+
+  // update global unread badge
+  const totalUnread = Object.values(unreadMap).reduce((s,n)=>s+n,0);
+  updateGlobalNotifBadge(totalUnread);
+
+  // wire row click to open chat (excluding clicking the buttons)
+  listEl.querySelectorAll('[data-uid]').forEach(el => {
+    el.addEventListener('click', (ev) => {
+      if (ev.target.tagName.toLowerCase() === 'button') return;
+      const uid = el.getAttribute('data-uid');
+      openAdminChat(uid);
     });
-    listEl.innerHTML = html.join('');
   });
 }
 
-function openAdminChat(userId) {
+// load admin user list realtime
+function loadChatUsersRealtime(){
+  const listEl = document.getElementById('chat-users'); if (!listEl) return;
+  if (adminUsersUnsub) { try { adminUsersUnsub(); } catch(e){} adminUsersUnsub = null; }
+
+  adminUsersUnsub = db.collection('chats').orderBy('updatedAt','desc').onSnapshot(async snap => {
+    try { await renderAdminUserList(snap); } catch(err){ console.error('renderAdminUserList', err); }
+  }, err => {
+    console.error('loadChatUsersRealtime', err);
+    listEl.innerHTML = '<div style="padding:12px;color:#f66">Failed to load users.</div>';
+  });
+
+  // optional: search input handling if you add an input with id 'chat-search'
+  const search = document.getElementById('chat-search');
+  if (search) search.addEventListener('input', debounce(()=> {
+    const qv = search.value.trim().toLowerCase();
+    document.querySelectorAll('#chat-users .chat-user-row').forEach(btn => {
+      const uid = btn.getAttribute('data-uid');
+      const info = chatUsersCache[uid] || {};
+      const match = (info.name || '').toLowerCase().includes(qv) || (info.preview || '').toLowerCase().includes(qv) || uid.includes(qv);
+      btn.style.display = match ? 'flex' : 'none';
+    });
+  }, 200));
+}
+
+async function openAdminChat(userId){
   currentAdminChatUser = userId;
-
-  const boxWrap = document.getElementById('chat-admin-box');
-  if (boxWrap) boxWrap.style.display = 'block';
-
-  const withEl = document.getElementById('chat-with');
-  const userDoc = db.collection('chats').doc(userId);
-  userDoc.get().then(doc => {
-    withEl.textContent = "Chat with: " + (doc.data()?.name || 'Customer');
-  });
-
-  listenAdminMessages(userId);
-}
-
-function listenAdminMessages(userId) {
-  if (adminMessagesUnsub) { try { adminMessagesUnsub(); } catch(e){} adminMessagesUnsub=null; }
-
   const messagesBox = document.getElementById('chat-admin-messages');
   if (!messagesBox) return;
-  messagesBox.innerHTML = '<div style="padding:8px;color:#ddd">Loading messages…</div>';
 
-  const colRef = db.collection('chats').doc(userId).collection('messages');
-  const q = colRef.orderBy('timestamp', 'asc');
+  // update chat header (if you have those elements in page)
+  const withEl = document.getElementById('chat-with');
+  if (withEl) {
+    try {
+      const doc = await db.collection('chats').doc(userId).get();
+      const data = doc.data() || {};
+      withEl.textContent = "Chat with: " + (data.name || userId);
+    } catch (err) { console.error(err); }
+  }
 
+  // mark unread messages as read by admin
+  await markMessagesReadForAdmin(userId);
+  // attach listener for messages
+  attachAdminMessagesListener(userId);
+  // ensure chat-admin-box is visible
+  const boxWrap = document.getElementById('chat-admin-box');
+  if (boxWrap) boxWrap.style.display = 'block';
+}
+
+function attachAdminMessagesListener(userId) {
+  if (adminMessagesUnsub) { try { adminMessagesUnsub(); } catch(e){} adminMessagesUnsub = null; }
+
+  const box = document.getElementById('chat-admin-messages'); if (!box) return;
+  box.innerHTML = '<div style="padding:8px;color:#ddd">Loading messages…</div>';
+
+  const q = db.collection('chats').doc(userId).collection('messages').orderBy('timestamp','asc');
   adminMessagesUnsub = q.onSnapshot(snapshot => {
-    messagesBox.innerHTML = '';
-    if (snapshot.empty) { messagesBox.innerHTML='<div style="padding:8px;color:#ddd">No messages yet.</div>'; return; }
-
+    box.innerHTML = '';
+    if (snapshot.empty) { box.innerHTML = '<div style="padding:12px;color:#ddd">No messages yet.</div>'; return; }
     snapshot.forEach(doc => {
-      const msg = doc.data();
-      const isAdmin = msg.sender === 'admin';
+      const m = doc.data();
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'column';
+      wrapper.style.alignItems = (m.sender === 'admin') ? 'flex-end' : 'flex-start';
 
-      const wrap = document.createElement('div');
-      wrap.style.marginBottom = '8px';
-      wrap.style.textAlign = isAdmin ? 'right' : 'left';
-
-      const bubble = document.createElement('span');
-      bubble.textContent = msg.message;
-      bubble.style.display = 'inline-block';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble ' + (m.sender === 'admin' ? 'admin' : 'customer');
+      bubble.textContent = m.message;
       bubble.style.padding = '8px 12px';
-      bubble.style.borderRadius = '10px';
-      bubble.style.background = isAdmin ? '#3498db' : '#444';
-      bubble.style.color = '#fff';
+      bubble.style.borderRadius = '12px';
       bubble.style.maxWidth = '78%';
       bubble.style.wordBreak = 'break-word';
 
-      wrap.appendChild(bubble);
+      const t = document.createElement('div');
+      t.className = 'msg-time';
+      t.style.fontSize = '0.75rem';
+      t.style.opacity = '0.7';
+      t.style.marginTop = '4px';
+      t.textContent = m.timestamp ? (m.timestamp.toDate ? m.timestamp.toDate().toLocaleString() : new Date(m.timestamp).toLocaleString()) : '';
 
-      const timeEl = document.createElement('div');
-      timeEl.textContent = msg.timestamp ? msg.timestamp.toDate().toLocaleString() : '';
-      timeEl.style.fontSize = '0.75rem';
-      timeEl.style.opacity = '0.7';
-      timeEl.style.marginTop = '4px';
-      wrap.appendChild(timeEl);
-
-      messagesBox.appendChild(wrap);
+      wrapper.appendChild(bubble);
+      wrapper.appendChild(t);
+      box.appendChild(wrapper);
     });
-
-    messagesBox.scrollTop = messagesBox.scrollHeight;
+    box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+  }, err => {
+    console.error('attachAdminMessagesListener', err);
+    box.innerHTML = '<div style="padding:12px;color:#f66">Failed to load messages.</div>';
   });
 }
 
-function adminSendChat() {
+function adminSendChat(){
   const input = document.getElementById('admin-chat-input');
   if (!input) return;
-  const msg = input.value.trim();
-  if (!msg) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const uid = currentAdminChatUser;
+  if (!uid) { alert('Select a user first'); return; }
+  const chatRef = db.collection('chats').doc(uid);
+  const messagesRef = chatRef.collection('messages');
 
-  const userId = currentAdminChatUser;
-  if (!userId) return alert('Select a user first');
-
-  db.collection('chats').doc(userId).collection('messages').add({
-    sender: "admin",
-    message: msg,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(() => input.value = '');
+  messagesRef.add({
+    sender: 'admin',
+    message: text,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    readByAdmin: true,
+    readByCustomer: false
+  }).then(() => {
+    chatRef.set({ unreadForAdmin: false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    input.value = '';
+  }).catch(err => {
+    console.error('adminSendChat', err);
+    alert('Failed to send message.');
+  });
 }
 
-// ----------------- INITIALIZE -----------------
-window.addEventListener('load', () => {
-  initChat();
-});
+async function markMessagesReadForAdmin(userId){
+  if (!userId) return;
+  try {
+    const q = db.collection('chats').doc(userId).collection('messages')
+      .where('sender','==','customer').where('readByAdmin','==',false);
+    const snap = await q.get();
+    if (snap.empty) {
+      // ensure parent flag is false
+      await db.collection('chats').doc(userId).set({ unreadForAdmin: false }, { merge: true });
+      return;
+    }
+    const batch = db.batch();
+    snap.forEach(d => batch.update(d.ref, { readByAdmin: true }));
+    batch.update(db.collection('chats').doc(userId), { unreadForAdmin: false });
+    await batch.commit();
+  } catch (err) {
+    console.error('markMessagesReadForAdmin', err);
+  }
+}
 
+function closeChat(){
+  currentAdminChatUser = null;
+  if (adminMessagesUnsub) { try { adminMessagesUnsub(); } catch(e){} adminMessagesUnsub = null; }
+  const boxWrap = document.getElementById('chat-admin-box'); if (boxWrap) boxWrap.style.display = 'none';
+  const cam = document.getElementById('chat-admin-messages'); if (cam) cam.innerHTML = '';
+  // refresh users list
+  db.collection('chats').get().then(snap => renderAdminUserList(snap)).catch(()=>{});
+}
 
-/* ---------- Auth: signup/login/logout ---------- */
+function updateGlobalNotifBadge(count){
+  const badge = document.getElementById('chat-notif');
+  if (!badge) return;
+  if (count > 0) { badge.style.display = 'inline-block'; badge.textContent = count > 99 ? '99+' : String(count); }
+  else { badge.style.display = 'none'; badge.textContent = ''; }
+}
+
+/* ---------- Notifications & watchers ---------- */
+function startGlobalNotificationWatcher(){
+  try {
+    // listen to recent messages across chats for notifications
+    db.collectionGroup('messages').orderBy('timestamp','desc').limit(50).onSnapshot(snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const m = change.doc.data();
+        if (!m || m.sender !== 'customer') return;
+        const pathParts = change.doc.ref.path.split('/'); // ['chats','{uid}','messages','{msgId}']
+        const uid = pathParts[1];
+        notifyAdminOfIncomingMessage(uid, m.name || 'Customer', m.message);
+        // bump badge quickly
+        const badge = document.getElementById('chat-notif');
+        if (badge) {
+          const curr = badge.style.display === 'inline-block' ? (Number(badge.textContent.replace('+','')) || 0) : 0;
+          updateGlobalNotifBadge(curr + 1);
+        }
+      });
+    }, err => {
+      console.warn('global watcher err', err);
+    });
+  } catch (e) {
+    // collectionGroup may be blocked by rules or plan; ignore gracefully
+    console.warn('collectionGroup watcher not supported or failed', e);
+  }
+}
+
+function notifyAdminOfIncomingMessage(userId, name, message){
+  try {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    const isActive = (document.visibilityState === 'visible') && (currentAdminChatUser === userId);
+    if (isActive) return;
+    const n = new Notification(name || 'Customer', {
+      body: message.length > 100 ? message.slice(0,97) + '...' : message,
+      tag: `chat-${userId}`,
+      renotify: true
+    });
+    n.onclick = () => { window.focus(); openAdminChat(userId); n.close(); };
+  } catch (err) { /* ignore */ }
+}
+
+/* ------------------- CALL SYSTEM (WebRTC with Firestore signaling) ------------------- */
+/*
+Basic flow:
+- A caller (customer or admin) creates a call document in 'calls' collection with callerId and calleeId and state:'requested'
+- Caller creates offer SDP and writes to call doc; also writes ICE candidates to offerCandidates subcollection
+- Callee (acceptor) responds by creating answer and writing to call doc; answerCandidates subcollection used similarly
+- Both peers exchange ICE candidates and connect
+Note: This is demo-level. Use TURN servers for reliability.
+*/
+
+async function prepareLocalMedia(){
+  if (localStream) return;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    const localEl = document.getElementById('local-video');
+    if (localEl) localEl.srcObject = localStream;
+  } catch (err) {
+    alert('Unable to access camera/microphone: ' + (err.message || err));
+    throw err;
+  }
+}
+
+async function createPeerConnection(callRef){
+  pc = new RTCPeerConnection(rtcConfig);
+  remoteStream = new MediaStream();
+  const remoteEl = document.getElementById('remote-video');
+  if (remoteEl) remoteEl.srcObject = remoteStream;
+
+  if (localStream) localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  pc.ontrack = event => { event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track)); };
+
+  pc.onicecandidate = event => {
+    if (!event.candidate) return;
+    const cand = event.candidate.toJSON();
+    // determine where to store candidate: if call doc has offer and we are the answerer, use answerCandidates, else offerCandidates.
+    callRef.get().then(doc => {
+      const data = doc.data() || {};
+      if (!data.offer) {
+        // no offer yet -> we are caller adding offerCandidates
+        callRef.collection('offerCandidates').add(cand).catch(()=>{});
+      } else {
+        // offer exists -> add to answerCandidates
+        callRef.collection('answerCandidates').add(cand).catch(()=>{});
+      }
+    }).catch(()=>{});
+  };
+}
+
+// Caller from customer side (starts call)
+async function startCallAsCustomer(){
+  const user = firebase.auth().currentUser;
+  if (!user) return alert('Please login to start a call');
+
+  // Simple strategy: find an admin user to call (first admin document in users collection)
+  const adminSnap = await usersRef().where('role','==','admin').limit(1).get();
+  if (adminSnap.empty) return alert('No admin available for calls right now');
+
+  const adminDoc = adminSnap.docs[0];
+  const calleeId = adminDoc.id;
+  const callRef = db.collection('calls').doc(); currentCallId = callRef.id;
+
+  await callRef.set({ callerId: user.uid, calleeId, state:'requested', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+  await prepareLocalMedia();
+  await createPeerConnection(callRef);
+
+  // create offer
+  const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+  await callRef.set({ offer: { type: offer.type, sdp: offer.sdp }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+
+  // listen for answer
+  callRef.onSnapshot(async snap => {
+    const data = snap.data();
+    if (!data) return;
+    if (data.answer && !pc.currentRemoteDescription) {
+      const answer = new RTCSessionDescription(data.answer);
+      await pc.setRemoteDescription(answer);
+    }
+    if (data.state === 'ended') hangupCall();
+  });
+
+  // listen for answerCandidates
+  callRef.collection('answerCandidates').onSnapshot(snap => {
+    snap.docChanges().forEach(async ch => {
+      if (ch.type === 'added') {
+        const c = ch.doc.data();
+        try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) { console.warn('addIce candidate error', e); }
+      }
+    });
+  });
+
+  alert('Calling admin...');
+}
+
+// Admin listens for incoming call requests and accepts/rejects
+function listenForCallRequests(){
+  const me = firebase.auth().currentUser;
+  if (!me) return;
+  const q = db.collection('calls').where('calleeId','==', me.uid).where('state','==','requested');
+  q.onSnapshot(snap => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'added') {
+        const callId = change.doc.id;
+        const data = change.doc.data();
+        const caller = data.callerId || data.callerName || 'Customer';
+        if (confirm(`Incoming call from ${caller}. Accept?`)) answerCallAsAdmin(callId);
+        else { db.collection('calls').doc(callId).update({ state:'ended' }).catch(()=>{}); }
+      }
+    });
+  });
+}
+
+async function answerCallAsAdmin(callId){
+  try {
+    await prepareLocalMedia();
+    const callRef = db.collection('calls').doc(callId);
+    const callDoc = await callRef.get();
+    if (!callDoc.exists) return;
+    const data = callDoc.data();
+
+    await callRef.update({ state:'accepted', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await createPeerConnection(callRef);
+
+    // set remote description from offer
+    if (data.offer) {
+      const offer = new RTCSessionDescription(data.offer);
+      await pc.setRemoteDescription(offer);
+    }
+
+    const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+    await callRef.update({ answer: { type: answer.type, sdp: answer.sdp }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+    // listen for offerCandidates
+    callRef.collection('offerCandidates').onSnapshot(snap => {
+      snap.docChanges().forEach(async change => {
+        if (change.type === 'added') {
+          const c = change.doc.data();
+          try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) { console.warn('addIce', e); }
+        }
+      });
+    });
+  } catch (err) {
+    console.error('answerCallAsAdmin error', err);
+  }
+}
+
+// Admin initiates a call to a user
+async function startCallAsAdmin(userId){
+  const me = firebase.auth().currentUser;
+  if (!me) return alert('Login as admin to start calls');
+
+  const callRef = db.collection('calls').doc(); currentCallId = callRef.id;
+  await callRef.set({ callerId: me.uid, calleeId: userId, state:'requested', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+  await prepareLocalMedia();
+  await createPeerConnection(callRef);
+
+  const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+  await callRef.set({ offer: { type: offer.type, sdp: offer.sdp }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+
+  callRef.onSnapshot(async snap => {
+    const data = snap.data();
+    if (!data) return;
+    if (data.answer && !pc.currentRemoteDescription) {
+      const ans = new RTCSessionDescription(data.answer);
+      await pc.setRemoteDescription(ans);
+    }
+    if (data.state === 'ended') hangupCall();
+  });
+
+  callRef.collection('answerCandidates').onSnapshot(snap => {
+    snap.docChanges().forEach(async ch => {
+      if (ch.type === 'added') {
+        const c = ch.doc.data();
+        try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) { console.warn('addIce', e); }
+      }
+    });
+  });
+
+  // now waiting for answer...
+}
+
+async function hangupCall(){
+  try {
+    if (pc) { pc.close(); pc = null; }
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    if (remoteStream) { remoteStream.getTracks().forEach(t => t.stop()); remoteStream = null; }
+    if (currentCallId) { await db.collection('calls').doc(currentCallId).update({ state:'ended' }).catch(()=>{}); currentCallId = null; }
+    const localEl = document.getElementById('local-video'); if (localEl) localEl.srcObject = null;
+    const remoteEl = document.getElementById('remote-video'); if (remoteEl) remoteEl.srcObject = null;
+  } catch (e) { console.warn('hangup error', e); }
+}
+
+/* ---------------------- Legacy chat helper (toggleChatBox) ---------------------- */
+function toggleChatBox() {
+  const box = document.getElementById("chat-box");
+  if (!box) return;
+  box.style.display = box.style.display === "none" || box.style.display === "" ? "flex" : "none";
+  if (box.style.display === "flex") {
+    const messages = document.getElementById("chat-messages");
+    setTimeout(() => { if (messages) messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' }); }, 150);
+  }
+}
+
+/* ---------------------- Auth: signup/login/logout ---------------------- */
 async function signupUser(e){
   e.preventDefault();
   const username = (q('#signup-username')||{}).value?.trim();
@@ -300,7 +746,7 @@ async function loginUser(e){
 
 function logoutUser(){ auth.signOut(); }
 
-/* ---------- auth state & UI ---------- */
+/* ---------- auth state & UI (keeps working behavior) ---------- */
 function bindAuthState(){
   auth.onAuthStateChanged(async user => {
     const welcome = q('#welcome-user-top');
@@ -421,7 +867,7 @@ async function openProductModal(id){
         </div>
       </div>
     `;
-    const modal = q('#product-modal'); modal.style.display = 'flex'; modal.setAttribute('aria-hidden','false');
+    const modal = q('#product-modal'); if(modal){ modal.style.display = 'flex'; modal.setAttribute('aria-hidden','false'); }
   } catch (err) { console.error(err); alert('Open product failed'); }
 }
 function closeProductModal(){ const m = q('#product-modal'); if (m){ m.style.display='none'; m.setAttribute('aria-hidden','true'); } }
@@ -648,10 +1094,6 @@ function renderAdminProducts(){
   }).join('');
 }
 
-
-
-
-
 function showAddProduct(){ q('#product-form-area').style.display='block'; q('#product-form-title').textContent='Add Product'; q('#product-form').reset(); q('#p-id').value=''; }
 function hideProductForm(){ q('#product-form-area').style.display='none'; }
 
@@ -735,5 +1177,4 @@ async function advanceOrder(id){
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
 
-
-
+/* ---------- End of script.js ---------- */
