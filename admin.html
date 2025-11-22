@@ -1,292 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CobainTech Admin</title>
-<link rel="stylesheet" href="style.css">
-
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Admin Dashboard — CobainTech</title>
+<link rel="stylesheet" href="style.css" />
 <style>
-/* ----------------------------------------------------------
-   GLOBAL LAYOUT
------------------------------------------------------------*/
-body {
-  margin: 0;
-  font-family: 'Segoe UI', Roboto, sans-serif;
-  background: #0c0d0f;
-  color: #e5e5e5;
-}
+/* ---------------- Global ---------------- */
+body { margin:0; font-family:'Segoe UI',Roboto,sans-serif; background:#0b0c0e; color:#eee; }
+a { color:inherit; text-decoration:none; }
+h1,h2,h3,h4,h5,h6 { margin:0; }
+button { cursor:pointer; }
 
-button { cursor: pointer; }
-a { color: inherit; text-decoration: none; }
+/* ---------------- Header ---------------- */
+header { background:#111; padding:12px 24px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.5);}
+.brand { font-weight:bold; font-size:1.5rem; color:#fff; }
+.header-actions button { background:#3498db; border:none; color:#fff; padding:8px 16px; border-radius:6px; transition:0.2s; }
+.header-actions button:hover { background:#2980b9; }
 
-.container {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
+/* ---------------- Layout ---------------- */
+.container { display:flex; height:calc(100vh - 60px); }
+nav.sidebar { width:260px; background:#111; padding:16px; display:flex; flex-direction:column; box-shadow:2px 0 6px rgba(0,0,0,0.5); }
+nav.sidebar button { background:none; border:none; color:#eee; text-align:left; padding:12px; margin-bottom:8px; border-radius:6px; font-size:1rem; transition:0.2s; position:relative; }
+nav.sidebar button.active, nav.sidebar button:hover { background:#3498db; color:#fff; }
+main.content { flex:1; padding:24px; overflow-y:auto; }
 
-/* ----------------------------------------------------------
-   SIDEBAR
------------------------------------------------------------*/
-.sidebar {
-  width: 240px;
-  background: #111214;
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border-right: 1px solid #1b1c1f;
-}
+/* ---------------- Cards & Tables ---------------- */
+.card { background:#111; padding:16px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.5); margin-bottom:24px; }
+table { width:100%; border-collapse:collapse; margin-top:12px; }
+th, td { padding:12px; text-align:left; }
+th { background:#222; font-weight:600; }
+tr:nth-child(even) { background:#1a1a1a; }
+tr:hover { background:#2c3e50; }
+button.small { padding:6px 12px; border-radius:6px; font-size:.85rem; }
 
-.sidebar button {
-  padding: 12px;
-  background: #141518;
-  border: 1px solid #1c1d21;
-  border-radius: 10px;
-  color: #d8d8d8;
-  font-size: 1rem;
-  text-align: left;
-  transition: 0.15s;
-}
+/* ---------------- Inputs ---------------- */
+input, select { background:#1a1a1a; color:#eee; border:1px solid #444; border-radius:6px; padding:6px 10px; width:100%; margin-bottom:12px; }
+label { display:block; margin-bottom:6px; font-weight:600; }
 
-.sidebar button:hover {
-  background: #1b1c20;
-}
+/* ---------------- Chat / Call Styles ---------------- */
 
-.sidebar button.active {
-  background: #2f80ed;
-  border-color: #2f80ed;
-  color: white;
-}
-
-/* ----------------------------------------------------------
-   CONTENT WRAPPER + SECTION HEADERS
------------------------------------------------------------*/
-.content {
-  flex: 1;
-  padding: 22px;
-  overflow-y: auto;
-}
-
-.section-header {
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #1b1c1f;
-}
-
-.section-header h2 {
-  margin: 0;
-  font-size: 1.6rem;
-  font-weight: 700;
-}
-
-/* ----------------------------------------------------------
-   CARDS
------------------------------------------------------------*/
-.card {
-  background: #111214;
-  border-radius: 12px;
-  padding: 18px;
-  border: 1px solid #1b1c1f;
-  margin-bottom: 20px;
-}
-
-/* ----------------------------------------------------------
-   TABLES
------------------------------------------------------------*/
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 12px;
-}
-
-th, td {
-  padding: 12px;
-  text-align: left;
-}
-
-th {
-  background: #1a1b1f;
-  font-weight: 600;
-}
-
-tr:nth-child(even) {
-  background: #15161a;
-}
-
-/* ----------------------------------------------------------
-   CHAT PANEL — DISCORD STYLE
------------------------------------------------------------*/
-#chat-wrapper {
-  display: flex;
-  gap: 14px;
-  height: 620px;
-}
-
-/* left panel — user list */
-#chat-users {
-  width: 300px;
-  background: #0e0f12;
-  border-radius: 12px;
-  padding: 10px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
+/* user list & avatars */
 .user-btn {
-  display: flex;
-  align-items: center;
-  padding: 10px;
-  gap: 12px;
-  border-radius: 8px;
-  background: #111214;
-  border: 1px solid #1b1c1f;
-  transition: 0.15s;
+  display:flex;
+  gap:12px;
+  align-items:center;
+  padding:10px;
+  background:#0f1113;
+  border-radius:8px;
+  border:1px solid #1b1b1b;
+  color:#eee;
+  cursor:pointer;
+  text-align:left;
+  width:100%;
 }
-
-.user-btn:hover {
-  background: #1a1b1f;
-}
-
+.user-btn:hover { background:#17202a; transform:translateY(-1px); }
 .user-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: #2f80ed;
-  color: white;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:#3498db;flex-shrink:0;
 }
+.user-meta { display:flex; flex-direction:column; align-items:flex-start; min-width:0; }
+.user-name { font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; }
+.user-last { font-size:0.85rem; color:#9b9b9b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; }
+.user-badge { margin-left:auto; background:#e74c3c; color:#fff; font-size:0.8rem; padding:4px 8px; border-radius:999px; }
 
-.user-meta { flex: 1; }
-.user-name { font-weight: 700; }
-.user-last {
-  font-size: .8rem;
-  color: #9ea0a3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* chat panel */
+.bubble-admin { align-self:flex-end; background:#3498db; color:#fff; padding:8px 12px; border-radius:12px; max-width:75%; }
+.bubble-customer { align-self:flex-start; background:#1f2226; color:#fff; padding:8px 12px; border-radius:12px; max-width:75%; }
+.msg-time { font-size:0.75rem; color:#9b9b9b; margin-top:4px; align-self:flex-end; }
 
-.user-badge {
-  background: #e74c3c;
-  padding: 4px 8px;
-  border-radius: 20px;
-  color: white;
-  font-size: .75rem;
-}
+/* small helpers */
+.hidden { display:none !important; }
 
-/* right panel — chat */
-#chat-panel {
-  flex: 1;
-  background: #0e0f12;
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-}
+/* video elements */
+.video-wrap { display:flex; gap:8px; align-items:center; }
+video { width:200px; height:120px; background:#000; border-radius:8px; object-fit:cover; }
 
-#chat-panel-header {
-  padding: 12px;
-  border-bottom: 1px solid #1b1c1f;
-  margin-bottom: 12px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
+/* chat search input smaller */
+#chat-search { width:220px; }
 
-#chat-admin-messages {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.bubble-admin {
-  align-self: flex-end;
-  background: #2f80ed;
-  color: white;
-  padding: 10px 14px;
-  border-radius: 12px;
-  max-width: 70%;
-}
-
-.bubble-customer {
-  align-self: flex-start;
-  background: #1a1b1f;
-  border: 1px solid #242529;
-  color: #eee;
-  padding: 10px 14px;
-  border-radius: 12px;
-  max-width: 70%;
-}
-
-.msg-time {
-  font-size: .75rem;
-  color: #8b8d90;
-  margin-top: 4px;
-  align-self: flex-end;
-}
-
-/* chat input row */
-#chat-input-row {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-#admin-chat-input {
-  flex: 1;
-  padding: 10px 12px;
-  background: #0d0e11;
-  border: 1px solid #1b1c1f;
-  border-radius: 20px;
-  color: white;
-}
-
-.btn {
-  padding: 10px 16px;
-  border-radius: 8px;
-  border: none;
-  color: white;
-}
-
-.btn.primary { background: #2f80ed; }
-.btn.ghost { background: #1b1c1f; }
+/* chat notif badge in sidebar */
+#chat-notif { position:absolute; right:14px; top:8px; display:none; background:#e74c3c; color:#fff; padding:4px 8px; border-radius:999px; font-size:0.85rem; }
 </style>
 </head>
-
 <body>
 
-<div class="container">
+<header>
+  <div class="brand">CobainTech Admin</div>
+  <div class="header-actions" style="display:flex;align-items:center;gap:10px;">
+    <span id="welcome-user-top" style="margin-right:10px;"></span>
 
-  <!-- SIDEBAR -->
+    <!-- Store Button -->
+    <button onclick="window.open('index.html','_blank')" class="btn-store">
+      🏬 Store
+    </button>
+
+    <!-- Logout Button -->
+    <button onclick="logoutUser()" class="btn-logout">
+      🔒 Logout
+    </button>
+  </div>
+</header>
+
+<style>
+.btn-store, .btn-logout {
+  background: #3498db;
+  border: none;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.btn-store:hover { background: #2980b9; }
+.btn-logout { background: #e74c3c; }
+.btn-logout:hover { background: #c0392b; }
+</style>
+
+<script>
+// Redefine logout after Firebase loads
+window.addEventListener('load', () => {
+  window.logoutUser = function() {
+    if (window.firebase && firebase.auth) {
+      firebase.auth().signOut().then(()=>{ window.location.href = 'index.html'; }).catch(err=>{ console.error(err); alert('Logout failed'); });
+    } else { alert('Firebase not ready'); }
+  };
+});
+</script>
+
+<div class="container">
   <nav class="sidebar">
     <button class="active" onclick="showTab('products')">Products</button>
     <button onclick="showTab('orders')">Orders</button>
     <button onclick="showTab('sales')">Sales</button>
     <button onclick="showTab('settings')">Settings</button>
-    <button onclick="showTab('chat')">Chat</button>
+    <button onclick="showTab('chat')" style="position:relative;">
+      Chat
+      <span id="chat-notif">0</span>
+    </button>
   </nav>
 
-  <!-- MAIN CONTENT -->
   <main class="content">
-
-    <!-- PRODUCTS TAB -->
+    <!-- Products Tab -->
     <section id="tab-products">
-      <div class="section-header">
-        <h2>Products</h2>
-      </div>
-
       <div class="card">
         <button onclick="showAddProduct()" class="btn primary">Add Product</button>
-        <div id="product-form-area" style="display:none; margin-top:14px;">
+        <div id="product-form-area">
           <h3 id="product-form-title">Add Product</h3>
           <form id="product-form" onsubmit="saveProduct(event)">
             <input type="hidden" id="p-id">
@@ -295,30 +153,83 @@ tr:nth-child(even) {
             <label>Stock <input type="number" id="p-stock" required></label>
             <label>Category <input id="p-category" required></label>
             <label>Description <input id="p-desc"></label>
-            <label>Image URL <input id="p-image-url"></label>
-
-            <div style="display:flex;gap:10px;">
-              <button class="btn primary" type="submit">Save</button>
-              <button class="btn ghost" type="button" onclick="hideProductForm()">Cancel</button>
+            <label>Image URL <input id="p-image-url" placeholder="https://example.com/image.jpg"></label>
+            <div style="display:flex;gap:8px;">
+              <button type="submit" class="btn primary">Save</button>
+              <button type="button" class="btn ghost" onclick="hideProductForm()">Cancel</button>
             </div>
           </form>
         </div>
       </div>
-
-      <input id="admin-search" placeholder="Search products..." oninput="renderAdminProducts()" style="padding:10px;border-radius:8px;border:1px solid #1b1c1f;background:#0d0e10;color:#fff;width:100%;">
-
+      <input id="admin-search" placeholder="Search products..." oninput="renderAdminProducts()">
       <div id="admin-product-list" class="product-grid"></div>
     </section>
 
+    <!-- ---------------- Admin Chat (FULL) ---------------- -->
+    <section id="tab-chat" style="display:none;">
+      <div class="card" style="padding:14px; display:flex; flex-direction:column; height:600px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;">
+          <h3 style="margin:0">Customer Messages</h3>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="chat-search" placeholder="Search customers..." style="padding:8px 10px; border-radius:8px; border:1px solid #333; background:#0b0c0e; color:#eee;" />
+            <button onclick="showTab('products')" class="btn small">Back</button>
+          </div>
+        </div>
 
+        <div style="display:flex; gap:12px; flex:1; min-height:0; overflow:hidden;">
+          <!-- left: users -->
+          <div id="chat-users" style="width:320px; background:#0f1113; border-radius:12px; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px;">
+            <div style="padding:12px;color:#999">Loading users…</div>
+          </div>
 
-    <!-- ORDERS TAB -->
-    <section id="tab-orders" style="display:none;">
-      <div class="section-header">
-        <h2>Orders</h2>
+          <!-- right: chat panel -->
+          <div style="flex:1; display:flex; flex-direction:column; min-width:0; gap:10px;">
+            <div id="chat-panel-header" style="background:#0f1113; padding:12px; border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
+              <div style="display:flex;gap:12px;align-items:center;">
+                <div id="chat-avatar" style="width:48px;height:48px;border-radius:50%;background:#3498db;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;">U</div>
+                <div>
+                  <div id="chat-with" style="font-weight:700;color:#fff">Select a customer</div>
+                  <div id="chat-last-seen" style="font-size:0.8rem;color:#9b9b9b">—</div>
+                </div>
+              </div>
+
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button id="btn-call" class="btn small" onclick="startCallToSelectedUser()">📞 Call</button>
+                <button id="btn-hangup" class="btn small" style="display:none;background:#e74c3c;color:#fff" onclick="hangupCall()">Hang up</button>
+              </div>
+            </div>
+
+            <div id="chat-admin-messages" style="flex:1; background:#070708; border-radius:8px; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px;">
+              <div style="color:#9b9b9b">Open a chat to view messages.</div>
+            </div>
+
+            <div id="chat-typing" style="min-height:18px;color:#9b9b9b;font-size:0.9rem"></div>
+
+            <div style="display:flex; gap:8px;">
+              <input id="admin-chat-input" placeholder="Type a message..." style="flex:1; padding:10px 12px; border-radius:20px; border:1px solid #333; background:#0b0c0e; color:#eee;">
+              <button class="btn primary" onclick="adminSendChat()">Send</button>
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:6px;">
+              <button class="btn ghost" onclick="insertQuickReply('Hello! How can I help you today?')">Quick: Hello</button>
+              <button class="btn ghost" onclick="insertQuickReply('Your order is being processed. I will update you soon.')">Quick: Order update</button>
+              <button class="btn ghost" onclick="insertQuickReply('Can you share a photo of the issue?')">Quick: Ask photo</button>
+            </div>
+
+            <!-- Optional video preview area for calls (script will show/hide as needed) -->
+            <div id="call-videos" style="display:flex; gap:12px; align-items:center;">
+              <video id="local-video" autoplay muted playsinline class="hidden"></video>
+              <video id="remote-video" autoplay playsinline class="hidden"></video>
+            </div>
+          </div>
+        </div>
       </div>
+    </section>
 
+    <!-- Orders Tab -->
+    <section id="tab-orders" style="display:none">
       <div class="card">
+        <h3>Orders</h3>
         <table>
           <thead>
             <tr>
@@ -335,16 +246,11 @@ tr:nth-child(even) {
       </div>
     </section>
 
-
-
-    <!-- SALES TAB -->
-    <section id="tab-sales" style="display:none;">
-      <div class="section-header">
-        <h2>Sales Overview</h2>
-      </div>
-
+    <!-- Sales Tab -->
+    <section id="tab-sales" style="display:none">
       <div class="card">
-        <div class="sales-metrics" style="display:flex;gap:20px;flex-wrap:wrap;">
+        <h3>Sales Overview</h3>
+        <div class="sales-metrics">
           <div class="metric">
             <h3>Total Revenue</h3>
             <p id="total-revenue">₱0</p>
@@ -354,93 +260,74 @@ tr:nth-child(even) {
             <p id="total-orders">0</p>
           </div>
         </div>
-
-        <canvas id="salesChart" height="230"></canvas>
+        <canvas id="salesChart" height="250"></canvas>
       </div>
     </section>
 
-
-
-    <!-- SETTINGS TAB -->
-    <section id="tab-settings" style="display:none;">
-      <div class="section-header">
-        <h2>Settings</h2>
-      </div>
-
+    <!-- Settings Tab -->
+    <section id="tab-settings" style="display:none">
       <div class="card">
+        <h3>Store Settings</h3>
         <form id="settings-form" onsubmit="saveSettings(event)">
-          <label>Store Name <input id="store-name"></label>
-          <label>Store Logo <input id="store-logo"></label>
-          <label>Contact Email <input id="store-email"></label>
-          <label>Phone <input id="store-phone"></label>
-          <button class="btn primary" type="submit">Save Settings</button>
+          <label>Store Name
+            <input id="store-name" placeholder="CobainTech">
+          </label>
+          <label>Store Logo URL
+            <input id="store-logo" placeholder="https://example.com/logo.png">
+          </label>
+          <label>Contact Email
+            <input id="store-email" placeholder="support@cobaintech.com">
+          </label>
+          <label>Contact Phone
+            <input id="store-phone" placeholder="+63 900 000 0000">
+          </label>
+          <button type="submit" class="btn primary">Save Settings</button>
         </form>
-      </div>
-    </section>
-
-
-
-    <!-- CHAT TAB -->
-    <section id="tab-chat" style="display:none;">
-      <div class="section-header">
-        <h2>Customer Chat</h2>
-      </div>
-
-      <div id="chat-wrapper">
-
-        <!-- LEFT: USER LIST -->
-        <div id="chat-users">
-          <div style="color:#888;text-align:center;padding:20px;">Loading users...</div>
-        </div>
-
-        <!-- RIGHT: CHAT PANEL -->
-        <div id="chat-panel">
-          <div id="chat-panel-header">
-            <div id="chat-user-info">
-              <div id="chat-with" style="font-weight:700;font-size:1.2rem;">Select a customer</div>
-              <div id="chat-last-seen" style="font-size:.8rem;color:#8b8d90;">—</div>
-            </div>
-          </div>
-
-          <div id="chat-admin-messages">
-            <div style="color:#888;">No conversation selected.</div>
-          </div>
-
-          <div id="chat-input-row">
-            <input id="admin-chat-input" placeholder="Type a message...">
-            <button class="btn primary" onclick="adminSendChat()">Send</button>
-          </div>
-
-          <div style="margin-top:10px;display:flex;gap:8px;">
-            <button class="btn ghost" onclick="insertQuickReply('Hello! How can I help you today?')">Hello</button>
-            <button class="btn ghost" onclick="insertQuickReply('Your order is being processed.')">Order Update</button>
-            <button class="btn ghost" onclick="insertQuickReply('Can you send a picture of the issue?')">Ask Photo</button>
-          </div>
-        </div>
-
       </div>
     </section>
 
   </main>
 </div>
 
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<!-- Firebase -->
+<!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js"></script>
-<script src="script.js"></script>
+
+<!-- YOUR uploaded script (the page expects your script code to be served via your environment).
+     Developer note: the local upload path is included below per your environment setup. -->
+<script src="sandbox:/mnt/data/script (3).js"></script>
 
 <script>
+/* small helpers used by the UI that also match the script */
 function showTab(tab){
   ['products','orders','sales','settings','chat'].forEach(t=>{
-    document.getElementById('tab-'+t).style.display = (t === tab) ? 'block' : 'none';
-    document.querySelectorAll('.sidebar button')
-      .forEach(btn => btn.classList.toggle('active', btn.textContent.toLowerCase() === t));
+    const el = document.getElementById('tab-'+t);
+    if (el) el.style.display = (t === tab) ? 'block' : 'none';
+    document.querySelectorAll('.sidebar button').forEach(btn=>{
+      if (btn.textContent.toLowerCase() === t) btn.classList.toggle('active', t === tab);
+    });
   });
 
-  if(tab === 'settings') loadSettings();
+  if (tab === 'chat') {
+    // focus search input a bit after the tab opens
+    setTimeout(()=>{ const s=document.getElementById('chat-search'); if(s) s.focus(); }, 200);
+  }
+
+  if (tab === 'settings') {
+    if (typeof loadSettings === 'function') loadSettings();
+  }
+}
+
+/* Quick-reply helper used in this admin page */
+function insertQuickReply(text){
+  const input = document.getElementById('admin-chat-input');
+  if (!input) return;
+  input.value = text;
+  input.focus();
 }
 </script>
 
