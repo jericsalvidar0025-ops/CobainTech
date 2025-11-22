@@ -1,31 +1,28 @@
-/* script.js — CobainTech (merged: working ecom + upgraded chat + call system)
-   Drop-in replacement. Uses Firebase compat SDK (auth(), firestore()).
+/* script.js — CobainTech merged (working base + upgraded chat + call system)
+   - Contains: helpers, products, cart, checkout, auth, admin, orders
+   - Replaces chat functions with upgraded real-time chat (usernames, unread badges, typing, notifications)
+   - Adds a minimal WebRTC call feature (Firestore signaling) for demo/testing
+   IMPORTANT: Calls require HTTPS (or localhost) and TURN servers may be needed for production NAT traversal.
 */
 
 /* ---------- helpers ---------- */
 function q(sel){ return document.querySelector(sel); }
-function qAll(sel){ return Array.from(document.querySelectorAll(sel)); }
+function qAll(sel){ return document.querySelectorAll(sel); }
+function money(v){ return `₱${Number(v).toLocaleString()}`; }
 function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 function debounce(fn,d=200){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),d); }; }
-function money(v){ return `₱${Number(v||0).toLocaleString()}`; }
-function placeholderDataURL(text){
+function placeholderDataURL(text){ 
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='700'>
     <rect fill='#0b0c0e' width='100%' height='100%'/>
     <text x='50%' y='50%' font-size='48' font-family='Segoe UI, Roboto' fill='#fff' text-anchor='middle' alignment-baseline='middle'>${escapeHtml(text)}</text>
-  </svg>`;
-  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-}
-function fmtTime(ts){
-  if(!ts) return '';
-  try { return ts.toDate().toLocaleString(); } catch(e){ return new Date(ts).toLocaleString(); }
+  </svg>`; 
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); 
 }
 
 /* ---------- Firestore refs ---------- */
 const productsRef = () => db.collection('products');
 const ordersRef = () => db.collection('orders');
 const usersRef = () => db.collection('users');
-const chatsRef = () => db.collection('chats');
-const callsRef = () => db.collection('calls');
 
 /* ---------- On load ---------- */
 window.addEventListener('load', () => {
@@ -33,48 +30,44 @@ window.addEventListener('load', () => {
   bindAuthState();
   initIndex();
   initAdmin();
-  initChat();
-  initCustomerOrders();
+  initChat(); // upgraded chat initialization
+  initCustomerOrders(); // Customer orders listener
 });
 
-/* ---------------------- CHAT (compat SDK) ---------------------- */
-/*
- Data model:
- - chats (collection)
-   - {userId} doc: { userId, name, updatedAt, unreadForAdmin: bool, typing: bool }
-     - messages (subcollection)
-       - {autoId} { sender: 'customer'|'admin', message: string, timestamp: Timestamp, readByAdmin: bool, readByCustomer: bool }
-
- Features:
- - Customer -> chat messages stored under their UID
- - Admin -> sees list with username, last message preview, unread badge
- - Typing indicator (chats/{uid}.typing)
- - Browser notifications for incoming customer messages (admin)
- - Mark messages read when admin opens chat
- - Call system using Firestore signaling (basic WebRTC)
-*/
-
-/* ---------- Chat state ---------- */
+/* ---------- Constants & state for chat/calls ---------- */
 const TYPING_DEBOUNCE_MS = 1200;
 let typingTimer = null;
 let customerChatUnsub = null;
 let adminUsersUnsub = null;
 let adminMessagesUnsub = null;
 let currentAdminChatUser = null;
-let chatUsersCache = {}; // cache of user metadata for quick search
+let chatUsersCache = {}; // cache user info for admin list
 
 /* ---------- WebRTC call state ---------- */
-const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }; // add TURN for production
+const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }; // add TURN servers for production
 let localStream = null;
 let remoteStream = null;
 let pc = null;
 let currentCallId = null;
 
-/* ------------------ initChat ------------------ */
+/* ---------------------- Chat (upgraded: names, unread, typing, notifications) ---------------------- */
+
+/*
+Data model:
+- chats (collection)
+  - {userId} (doc) { userId, name, updatedAt, unreadForAdmin: bool, typing: bool }
+    - messages (subcollection)
+      - {auto-id} { sender: 'customer'|'admin', message: string, timestamp: Timestamp, readByAdmin: bool, readByCustomer: bool }
+
+Notes:
+- Uses compat SDK (firebase.auth(), firebase.firestore()) as in your project.
+- Make sure 'users' collection contains username fields (optional) for fallback.
+*/
+
+// initChat: sets up listeners for customer (store) and admin (dashboard)
 function initChat(){
-  // Auth state: start listeners depending on page (store / admin)
   auth.onAuthStateChanged(user => {
-    // STORE (customer) view: show messages area
+    // Store (customer) view
     if (document.getElementById('chat-messages')) {
       if (user) startCustomerChat(user.uid, user.displayName || null);
       else {
@@ -83,59 +76,58 @@ function initChat(){
       }
     }
 
-    // ADMIN view: load users + notification watcher + call requests
+    // Admin view
     if (document.getElementById('chat-users')) {
       loadChatUsersRealtime();
+      // request permission for browser notifications
       if ("Notification" in window && Notification.permission !== 'granted') {
         Notification.requestPermission().catch(()=>{});
       }
-      attachGlobalMessageWatcherForNotifications();
+      // start watcher for new messages (for notifications and global badge)
+      startGlobalNotificationWatcher();
+      // listen for incoming call requests (if admin)
       listenForCallRequests();
     }
   });
 
-  // Wire chat input for customer
+  // Wire chat input (customer store)
   const chatInputEl = document.getElementById('chat-input');
   if (chatInputEl) {
     chatInputEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
+      }
     });
     chatInputEl.addEventListener('input', debounceCustomerTyping);
   }
 
-  // Wire admin input Enter key
+  // Wire admin send Enter
   const adminInput = document.getElementById('admin-chat-input');
   if (adminInput) adminInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); adminSendChat(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      adminSendChat();
+    }
   });
 }
 
-/* ----------------- toggleChatBox (index) ----------------- */
-function toggleChatBox(){
-  const box = document.getElementById("chat-box");
-  if(!box) return;
-  box.style.display = (box.style.display === "flex" || box.style.display === "") ? "none" : "flex";
-  if (box.style.display === "flex") {
-    const messages = document.getElementById('chat-messages');
-    setTimeout(()=> { if(messages) messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' }); }, 150);
-  }
-}
+/* ---------- CUSTOMER-side chat ---------- */
+function startCustomerChat(userId, displayName = null) {
+  if (customerChatUnsub) { try { customerChatUnsub(); } catch(e){} customerChatUnsub = null; }
 
-/* ----------------- CUSTOMER SIDE ----------------- */
-
-function startCustomerChat(userId, displayName = null){
-  if (customerChatUnsub) { try{ customerChatUnsub(); }catch(e){} customerChatUnsub = null; }
   const messagesBox = document.getElementById('chat-messages');
   if (!messagesBox) return;
 
-  // ensure parent doc exists and store name
-  const chatDocRef = chatsRef().doc(userId);
-  chatDocRef.set({ userId, name: displayName || '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(()=>{});
+  // Ensure parent chat doc exists
+  db.collection('chats').doc(userId).set({
+    userId,
+    name: displayName || '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).catch(err => console.error('init chat doc failed', err));
 
-  const colRef = chatsRef().doc(userId).collection('messages');
+  const colRef = db.collection('chats').doc(userId).collection('messages');
   const q = colRef.orderBy('timestamp','asc');
-
-  messagesBox.innerHTML = `<div style="padding:12px;color:#ddd">Loading messages…</div>`;
 
   customerChatUnsub = q.onSnapshot(snapshot => {
     messagesBox.innerHTML = '';
@@ -144,67 +136,81 @@ function startCustomerChat(userId, displayName = null){
       return;
     }
     snapshot.forEach(doc => {
-      const data = doc.data();
-      appendCustomerMessageToUI(messagesBox, data);
+      const m = doc.data();
+      appendCustomerMessageToUI(messagesBox, m);
     });
 
-    // mark admin->customer messages as read
+    // mark admin messages as read by customer
     markMessagesReadForCustomer(userId).catch(()=>{});
-    messagesBox.scrollTop = messagesBox.scrollHeight;
+    messagesBox.scrollTo({ top: messagesBox.scrollHeight, behavior: 'smooth' });
   }, err => {
-    console.error('customer listener error', err);
+    console.error('customer messages listener error', err);
     messagesBox.innerHTML = `<div style="padding:12px;color:#f66">Failed to load messages.</div>`;
+  });
+
+  window.addEventListener('beforeunload', () => {
+    db.collection('chats').doc(userId).set({ typing: false }, { merge: true }).catch(()=>{});
   });
 }
 
-function appendCustomerMessageToUI(container, m){
+function appendCustomerMessageToUI(container, m) {
   const time = m.timestamp ? m.timestamp.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
   const wrap = document.createElement('div');
   wrap.style.marginBottom = '8px';
-  wrap.style.display = 'flex';
-  wrap.style.flexDirection = 'column';
-  wrap.style.alignItems = (m.sender === 'customer') ? 'flex-end' : 'flex-start';
+  wrap.style.textAlign = (m.sender === 'customer') ? 'right' : 'left';
 
-  const bubble = document.createElement('div');
-  bubble.className = (m.sender === 'customer') ? 'bubble customer' : 'bubble admin';
+  const bubble = document.createElement('span');
   bubble.textContent = m.message;
+  bubble.style.display = 'inline-block';
+  bubble.style.padding = '8px 12px';
+  bubble.style.borderRadius = '12px';
+  bubble.style.maxWidth = '78%';
+  bubble.style.wordBreak = 'break-word';
+  bubble.style.background = (m.sender === 'customer') ? '#3498db' : '#444';
+  bubble.style.color = '#fff';
 
   const timeEl = document.createElement('div');
-  timeEl.className = 'msg-time';
   timeEl.textContent = time;
+  timeEl.style.fontSize = '0.75rem';
+  timeEl.style.opacity = '0.7';
+  timeEl.style.marginTop = '4px';
 
   wrap.appendChild(bubble);
   wrap.appendChild(timeEl);
   container.appendChild(wrap);
 }
 
-async function markMessagesReadForCustomer(userId){
-  const q = chatsRef().doc(userId).collection('messages').where('sender','==','admin').where('readByCustomer','==',false);
-  const snap = await q.get();
-  if (snap.empty) return;
+async function markMessagesReadForCustomer(userId) {
+  const msgsSnap = await db.collection('chats').doc(userId).collection('messages')
+    .where('sender','==','admin')
+    .where('readByCustomer','==',false)
+    .get();
+  if (msgsSnap.empty) return;
   const batch = db.batch();
-  snap.forEach(d => batch.update(d.ref, { readByCustomer: true }));
+  msgsSnap.forEach(d => batch.update(d.ref, { readByCustomer: true }));
   await batch.commit();
 }
 
-function sendChat(){
+function sendChat() {
   const input = document.getElementById('chat-input');
   if (!input) return;
   const message = input.value.trim();
   if (!message) return;
-  const user = firebase.auth().currentUser;
-  if (!user) return alert('Please login to chat.');
 
-  const chatRef = chatsRef().doc(user.uid);
+  const user = firebase.auth().currentUser;
+  if (!user) { alert('Please login to chat.'); return; }
+
+  const chatDocRef = db.collection('chats').doc(user.uid);
+  const messagesRef = chatDocRef.collection('messages');
   const nameToSave = user.displayName || (user.email ? user.email.split('@')[0] : 'Customer');
 
-  chatRef.set({
+  chatDocRef.set({
     userId: user.uid,
     name: nameToSave,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     unreadForAdmin: true
   }, { merge: true })
-  .then(() => chatRef.collection('messages').add({
+  .then(() => messagesRef.add({
     sender: 'customer',
     message,
     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
@@ -213,29 +219,34 @@ function sendChat(){
   }))
   .then(() => {
     input.value = '';
-    // turn off typing flag
-    chatRef.set({ typing: false }, { merge: true }).catch(()=>{});
+    // collapse typing
+    chatDocRef.set({ typing: false }, { merge: true }).catch(()=>{});
   })
   .catch(err => {
     console.error('sendChat error', err);
-    alert('Failed to send message.');
+    alert('Failed to send message. Check console.');
   });
 }
 
-function debounceCustomerTyping(){
+function debounceCustomerTyping() {
   const user = firebase.auth().currentUser;
   if (!user) return;
-  const chatDocRef = chatsRef().doc(user.uid);
+  const chatDocRef = db.collection('chats').doc(user.uid);
   chatDocRef.set({ typing: true }, { merge: true }).catch(()=>{});
   if (typingTimer) clearTimeout(typingTimer);
-  typingTimer = setTimeout(()=>{ chatDocRef.set({ typing: false }, { merge: true }).catch(()=>{}); }, TYPING_DEBOUNCE_MS);
+  typingTimer = setTimeout(() => {
+    chatDocRef.set({ typing: false }, { merge: true }).catch(()=>{});
+  }, TYPING_DEBOUNCE_MS);
 }
 
-/* ----------------- ADMIN SIDE (upgraded UI) ----------------- */
+/* ---------- ADMIN-side chat (UI + functions) ---------- */
 
+// Helper to format timestamp safely
+function fmtTime(ts){ if(!ts) return ''; try{ return ts.toDate().toLocaleString(); } catch(e){ return new Date(ts).toLocaleString(); } }
+
+// Render admin user list (with last message preview, unread count, initials avatar)
 async function renderAdminUserList(snapshot){
-  const listEl = document.getElementById('chat-users');
-  if (!listEl) return;
+  const listEl = document.getElementById('chat-users'); if(!listEl) return;
   if (snapshot.empty) {
     listEl.innerHTML = '<div style="padding:12px;color:#ddd">No chat users yet.</div>';
     updateGlobalNotifBadge(0);
@@ -243,109 +254,121 @@ async function renderAdminUserList(snapshot){
   }
 
   const docs = [];
-  snapshot.forEach(d => docs.push({ id: d.id, ...(d.data()||{}) }));
+  snapshot.forEach(d => docs.push({ id: d.id, ...d.data() }));
 
-  // fetch unread counts & last message previews in parallel
-  const unreadPromises = docs.map(doc =>
-    chatsRef().doc(doc.id).collection('messages')
-      .where('sender','==','customer').where('readByAdmin','==',false).get()
-      .then(s => ({ id: doc.id, unread: s.size })).catch(()=>({ id: doc.id, unread: 0 }))
-  );
-  const lastPromises = docs.map(doc =>
-    chatsRef().doc(doc.id).collection('messages').orderBy('timestamp','desc').limit(1).get()
-      .then(s => ({ id: doc.id, last: s.empty ? null : s.docs[0].data() })).catch(()=>({ id: doc.id, last: null }))
-  );
+  // parallel fetch unread counts & last message per chat
+  const unreadPromises = docs.map(d => db.collection('chats').doc(d.id).collection('messages')
+                                      .where('sender','==','customer').where('readByAdmin','==',false).get()
+                                      .then(s => ({ id: d.id, unread: s.size })).catch(()=>({id:d.id, unread:0})));
+  const lastPromises = docs.map(d => db.collection('chats').doc(d.id).collection('messages')
+                                      .orderBy('timestamp','desc').limit(1).get()
+                                      .then(s => ({ id: d.id, last: s.empty ? null : s.docs[0].data() })).catch(()=>({id:d.id,last:null})));
 
   const unreadResults = await Promise.all(unreadPromises);
   const lastResults = await Promise.all(lastPromises);
   const unreadMap = Object.fromEntries(unreadResults.map(x => [x.id, x.unread]));
   const lastMap = Object.fromEntries(lastResults.map(x => [x.id, x.last]));
 
-  // build HTML
-  const html = docs.map(doc => {
-    const uid = doc.id;
-    const name = doc.name || doc.username || uid;
-    const initials = (name.split(' ').map(p=>p[0]).join('').slice(0,2) || 'U').toUpperCase();
-    const last = lastMap[uid];
-    const preview = last ? (String(last.message).length > 40 ? String(last.message).slice(0,37)+'...' : last.message) : 'No messages';
+  const html = docs.map(d => {
+    const name = d.name || d.username || d.userId || d.id;
+    const initials = (name.split(' ').map(p => p[0]).join('').slice(0,2) || 'U').toUpperCase();
+    const last = lastMap[d.id];
+    const preview = last ? (last.message.length > 40 ? last.message.slice(0,37) + '...' : last.message) : 'No messages';
     const ts = last && last.timestamp ? (last.timestamp.toDate ? last.timestamp.toDate().toLocaleString() : new Date(last.timestamp).toLocaleString()) : '';
-    const unread = unreadMap[uid] || 0;
-    chatUsersCache[uid] = { name, initials, preview, ts, unread };
+    const unread = unreadMap[d.id] || 0;
+    chatUsersCache[d.id] = { name, initials, preview, ts, unread };
+    const activeStyle = (currentAdminChatUser === d.id) ? 'background:#18314a;border:1px solid #234455;' : '';
     return `
-      <button class="user-btn" data-uid="${uid}" onclick="openAdminChat('${uid}')">
-        <div class="user-avatar">${initials}</div>
-        <div class="user-meta">
-          <div class="user-name">${escapeHtml(name)}</div>
-          <div class="user-last">${escapeHtml(preview)} · <span style="color:#6d7880">${escapeHtml(ts)}</span></div>
+      <div class="chat-user-row" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;${activeStyle}" data-uid="${d.id}">
+        <div style="width:44px;height:44px;border-radius:50%;background:#2f80ed;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;color:#eee">${escapeHtml(name)}</div>
+          <div style="font-size:0.85rem;color:#9aa0a6">${escapeHtml(preview)} · <span style="color:#6d7880">${escapeHtml(ts)}</span></div>
         </div>
-        ${unread>0?`<div class="user-badge">${unread}</div>`:''}
-      </button>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          ${unread>0?`<div class="user-unread" style="background:#e74c3c;color:#fff;padding:4px 8px;border-radius:999px;font-weight:700">${unread}</div>`:''}
+          <div style="display:flex;gap:6px">
+            <button class="btn small" onclick="openAdminChat('${d.id}')">Open</button>
+            <button class="btn small ghost" onclick="startCallAsAdmin('${d.id}')">Call</button>
+          </div>
+        </div>
+      </div>
     `;
   }).join('');
 
   listEl.innerHTML = html;
 
-  // wire search filter if exists
-  const search = document.getElementById('chat-search');
-  if (search) {
-    search.addEventListener('input', debounce(() => {
-      const qv = (search.value || '').trim().toLowerCase();
-      qAll('#chat-users .user-btn').forEach(btn => {
-        const uid = btn.getAttribute('data-uid');
-        const info = chatUsersCache[uid] || {};
-        const match = (info.name||'').toLowerCase().includes(qv) || (info.preview||'').toLowerCase().includes(qv) || uid.includes(qv);
-        btn.style.display = match ? 'flex' : 'none';
-      });
-    }, 150));
-  }
+  // update global unread badge
+  const totalUnread = Object.values(unreadMap).reduce((s,n)=>s+n,0);
+  updateGlobalNotifBadge(totalUnread);
+
+  // wire row click to open chat (excluding clicking the buttons)
+  listEl.querySelectorAll('[data-uid]').forEach(el => {
+    el.addEventListener('click', (ev) => {
+      if (ev.target.tagName.toLowerCase() === 'button') return;
+      const uid = el.getAttribute('data-uid');
+      openAdminChat(uid);
+    });
+  });
 }
 
+// load admin user list realtime
 function loadChatUsersRealtime(){
-  const listEl = document.getElementById('chat-users');
-  if (!listEl) return;
-  if (adminUsersUnsub) { try{ adminUsersUnsub(); } catch(e){} adminUsersUnsub = null; }
+  const listEl = document.getElementById('chat-users'); if (!listEl) return;
+  if (adminUsersUnsub) { try { adminUsersUnsub(); } catch(e){} adminUsersUnsub = null; }
 
-  adminUsersUnsub = chatsRef().orderBy('updatedAt','desc').onSnapshot(async snap => {
-    try { await renderAdminUserList(snap); } catch(err) { console.error('renderAdminUserList error', err); }
+  adminUsersUnsub = db.collection('chats').orderBy('updatedAt','desc').onSnapshot(async snap => {
+    try { await renderAdminUserList(snap); } catch(err){ console.error('renderAdminUserList', err); }
   }, err => {
-    console.error('loadChatUsersRealtime error', err);
+    console.error('loadChatUsersRealtime', err);
     listEl.innerHTML = '<div style="padding:12px;color:#f66">Failed to load users.</div>';
   });
+
+  // optional: search input handling if you add an input with id 'chat-search'
+  const search = document.getElementById('chat-search');
+  if (search) search.addEventListener('input', debounce(()=> {
+    const qv = search.value.trim().toLowerCase();
+    document.querySelectorAll('#chat-users .chat-user-row').forEach(btn => {
+      const uid = btn.getAttribute('data-uid');
+      const info = chatUsersCache[uid] || {};
+      const match = (info.name || '').toLowerCase().includes(qv) || (info.preview || '').toLowerCase().includes(qv) || uid.includes(qv);
+      btn.style.display = match ? 'flex' : 'none';
+    });
+  }, 200));
 }
 
 async function openAdminChat(userId){
   currentAdminChatUser = userId;
-  // show header
-  const nameEl = document.getElementById('chat-with');
-  const avatarEl = document.getElementById('chat-avatar');
-  const lastSeen = document.getElementById('chat-last-seen');
-  try {
-    const doc = await chatsRef().doc(userId).get();
-    const data = doc.exists ? doc.data() : {};
-    const name = data.name || userId;
-    nameEl.textContent = name;
-    avatarEl.textContent = (name.split(' ').map(p=>p[0]).join('').slice(0,2) || 'U').toUpperCase();
-    lastSeen.textContent = data.updatedAt ? fmtTime(data.updatedAt) : '';
-  } catch(e) { console.error('openAdminChat header fetch error', e); }
+  const messagesBox = document.getElementById('chat-admin-messages');
+  if (!messagesBox) return;
 
-  // mark unread -> read
+  // update chat header (if you have those elements in page)
+  const withEl = document.getElementById('chat-with');
+  if (withEl) {
+    try {
+      const doc = await db.collection('chats').doc(userId).get();
+      const data = doc.data() || {};
+      withEl.textContent = "Chat with: " + (data.name || userId);
+    } catch (err) { console.error(err); }
+  }
+
+  // mark unread messages as read by admin
   await markMessagesReadForAdmin(userId);
-
-  // show messages box
+  // attach listener for messages
   attachAdminMessagesListener(userId);
-  // reveal hangup/call button states reset
-  q('#btn-hangup') && (q('#btn-hangup').style.display = 'none');
-  q('#btn-call') && (q('#btn-call').style.display = 'inline-block');
+  // ensure chat-admin-box is visible
+  const boxWrap = document.getElementById('chat-admin-box');
+  if (boxWrap) boxWrap.style.display = 'block';
 }
 
-function attachAdminMessagesListener(userId){
-  if (adminMessagesUnsub) { try{ adminMessagesUnsub(); } catch(e){} adminMessagesUnsub = null; }
-  const box = document.getElementById('chat-admin-messages');
-  if (!box) return;
-  box.innerHTML = '<div style="padding:12px;color:#ddd">Loading messages…</div>';
+function attachAdminMessagesListener(userId) {
+  if (adminMessagesUnsub) { try { adminMessagesUnsub(); } catch(e){} adminMessagesUnsub = null; }
 
-  const qref = chatsRef().doc(userId).collection('messages').orderBy('timestamp','asc');
-  adminMessagesUnsub = qref.onSnapshot(snapshot => {
+  const box = document.getElementById('chat-admin-messages'); if (!box) return;
+  box.innerHTML = '<div style="padding:8px;color:#ddd">Loading messages…</div>';
+
+  const q = db.collection('chats').doc(userId).collection('messages').orderBy('timestamp','asc');
+  adminMessagesUnsub = q.onSnapshot(snapshot => {
     box.innerHTML = '';
     if (snapshot.empty) { box.innerHTML = '<div style="padding:12px;color:#ddd">No messages yet.</div>'; return; }
     snapshot.forEach(doc => {
@@ -356,29 +379,27 @@ function attachAdminMessagesListener(userId){
       wrapper.style.alignItems = (m.sender === 'admin') ? 'flex-end' : 'flex-start';
 
       const bubble = document.createElement('div');
-      bubble.className = (m.sender === 'admin') ? 'bubble-admin' : 'bubble-customer';
+      bubble.className = 'bubble ' + (m.sender === 'admin' ? 'admin' : 'customer');
       bubble.textContent = m.message;
+      bubble.style.padding = '8px 12px';
+      bubble.style.borderRadius = '12px';
+      bubble.style.maxWidth = '78%';
+      bubble.style.wordBreak = 'break-word';
 
       const t = document.createElement('div');
       t.className = 'msg-time';
+      t.style.fontSize = '0.75rem';
+      t.style.opacity = '0.7';
+      t.style.marginTop = '4px';
       t.textContent = m.timestamp ? (m.timestamp.toDate ? m.timestamp.toDate().toLocaleString() : new Date(m.timestamp).toLocaleString()) : '';
 
       wrapper.appendChild(bubble);
       wrapper.appendChild(t);
       box.appendChild(wrapper);
     });
-
-    // typing indicator: show customer typing flag if set
-    chatsRef().doc(userId).get().then(doc => {
-      const typing = doc.exists ? doc.data().typing : false;
-      const typingEl = document.getElementById('chat-typing');
-      if (typing) typingEl.textContent = 'Customer is typing…';
-      else typingEl.textContent = '';
-    }).catch(()=>{});
-
-    box.scrollTop = box.scrollHeight;
+    box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
   }, err => {
-    console.error('attachAdminMessagesListener error', err);
+    console.error('attachAdminMessagesListener', err);
     box.innerHTML = '<div style="padding:12px;color:#f66">Failed to load messages.</div>';
   });
 }
@@ -389,12 +410,11 @@ function adminSendChat(){
   const text = input.value.trim();
   if (!text) return;
   const uid = currentAdminChatUser;
-  if (!uid) return alert('Select a user first');
+  if (!uid) { alert('Select a user first'); return; }
+  const chatRef = db.collection('chats').doc(uid);
+  const messagesRef = chatRef.collection('messages');
 
-  const chatRef = chatsRef().doc(uid);
-  const msgs = chatRef.collection('messages');
-
-  msgs.add({
+  messagesRef.add({
     sender: 'admin',
     message: text,
     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
@@ -404,7 +424,7 @@ function adminSendChat(){
     chatRef.set({ unreadForAdmin: false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
     input.value = '';
   }).catch(err => {
-    console.error('adminSendChat error', err);
+    console.error('adminSendChat', err);
     alert('Failed to send message.');
   });
 }
@@ -412,24 +432,32 @@ function adminSendChat(){
 async function markMessagesReadForAdmin(userId){
   if (!userId) return;
   try {
-    const q = chatsRef().doc(userId).collection('messages').where('sender','==','customer').where('readByAdmin','==',false);
+    const q = db.collection('chats').doc(userId).collection('messages')
+      .where('sender','==','customer').where('readByAdmin','==',false);
     const snap = await q.get();
     if (snap.empty) {
-      await chatsRef().doc(userId).set({ unreadForAdmin: false }, { merge: true });
+      // ensure parent flag is false
+      await db.collection('chats').doc(userId).set({ unreadForAdmin: false }, { merge: true });
       return;
     }
     const batch = db.batch();
     snap.forEach(d => batch.update(d.ref, { readByAdmin: true }));
-    batch.update(chatsRef().doc(userId), { unreadForAdmin: false });
+    batch.update(db.collection('chats').doc(userId), { unreadForAdmin: false });
     await batch.commit();
   } catch (err) {
-    console.error('markMessagesReadForAdmin error', err);
+    console.error('markMessagesReadForAdmin', err);
   }
 }
 
-/* ----------------- Global Notifications & watcher ----------------- */
+function closeChat(){
+  currentAdminChatUser = null;
+  if (adminMessagesUnsub) { try { adminMessagesUnsub(); } catch(e){} adminMessagesUnsub = null; }
+  const boxWrap = document.getElementById('chat-admin-box'); if (boxWrap) boxWrap.style.display = 'none';
+  const cam = document.getElementById('chat-admin-messages'); if (cam) cam.innerHTML = '';
+  // refresh users list
+  db.collection('chats').get().then(snap => renderAdminUserList(snap)).catch(()=>{});
+}
 
-// update global badge element (you can add a badge element with id="chat-notif" if you want)
 function updateGlobalNotifBadge(count){
   const badge = document.getElementById('chat-notif');
   if (!badge) return;
@@ -437,9 +465,10 @@ function updateGlobalNotifBadge(count){
   else { badge.style.display = 'none'; badge.textContent = ''; }
 }
 
-// collectionGroup watcher to get new customer messages (used for notifications)
-function attachGlobalMessageWatcherForNotifications(){
+/* ---------- Notifications & watchers ---------- */
+function startGlobalNotificationWatcher(){
   try {
+    // listen to recent messages across chats for notifications
     db.collectionGroup('messages').orderBy('timestamp','desc').limit(50).onSnapshot(snap => {
       snap.docChanges().forEach(change => {
         if (change.type !== 'added') return;
@@ -447,172 +476,145 @@ function attachGlobalMessageWatcherForNotifications(){
         if (!m || m.sender !== 'customer') return;
         const pathParts = change.doc.ref.path.split('/'); // ['chats','{uid}','messages','{msgId}']
         const uid = pathParts[1];
-        notifyAdminOfIncomingMessage(uid, m.name || '', m.message);
-        // small instant badge bump (real unread recalculated by list render)
+        notifyAdminOfIncomingMessage(uid, m.name || 'Customer', m.message);
+        // bump badge quickly
         const badge = document.getElementById('chat-notif');
         if (badge) {
           const curr = badge.style.display === 'inline-block' ? (Number(badge.textContent.replace('+','')) || 0) : 0;
           updateGlobalNotifBadge(curr + 1);
         }
       });
-    }, err => { console.warn('global message watcher error', err); });
-  } catch(e) {
-    // collectionGroup might be restricted by rules/plans; ignore
-    console.warn('collectionGroup watcher unavailable', e);
+    }, err => {
+      console.warn('global watcher err', err);
+    });
+  } catch (e) {
+    // collectionGroup may be blocked by rules or plan; ignore gracefully
+    console.warn('collectionGroup watcher not supported or failed', e);
   }
 }
 
 function notifyAdminOfIncomingMessage(userId, name, message){
   try {
-    if (!("Notification" in window)) return;
+    if (!('Notification' in window)) return;
     if (Notification.permission !== 'granted') return;
     const isActive = (document.visibilityState === 'visible') && (currentAdminChatUser === userId);
     if (isActive) return;
     const n = new Notification(name || 'Customer', {
-      body: message && message.length > 100 ? message.slice(0,97) + '...' : message,
+      body: message.length > 100 ? message.slice(0,97) + '...' : message,
       tag: `chat-${userId}`,
       renotify: true
     });
     n.onclick = () => { window.focus(); openAdminChat(userId); n.close(); };
-  } catch(e) { /* ignore */ }
+  } catch (err) { /* ignore */ }
 }
 
-/* ------------------- CALL SYSTEM (WebRTC using Firestore signaling) ------------------- */
-/* Basic flows provided for testing:
-   - startCallAsCustomer() creates call doc with callerId = user.uid and calleeId chosen (simple admin pick)
-   - startCallAsAdmin(userId) creates call doc with callerId = admin.uid and calleeId = userId
-   - answerCallAsAdmin(callId) and the customer flow listen for answer
-   - Uses collections: calls/{callId} with fields offer/answer and subcollections offerCandidates/answerCandidates
+/* ------------------- CALL SYSTEM (WebRTC with Firestore signaling) ------------------- */
+/*
+Basic flow:
+- A caller (customer or admin) creates a call document in 'calls' collection with callerId and calleeId and state:'requested'
+- Caller creates offer SDP and writes to call doc; also writes ICE candidates to offerCandidates subcollection
+- Callee (acceptor) responds by creating answer and writing to call doc; answerCandidates subcollection used similarly
+- Both peers exchange ICE candidates and connect
+Note: This is demo-level. Use TURN servers for reliability.
 */
 
 async function prepareLocalMedia(){
   if (localStream) return;
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:true });
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
     const localEl = document.getElementById('local-video');
     if (localEl) localEl.srcObject = localStream;
   } catch (err) {
-    console.error('prepareLocalMedia error', err);
-    alert('Unable to access camera/microphone. Check permissions.');
+    alert('Unable to access camera/microphone: ' + (err.message || err));
     throw err;
   }
 }
 
-async function createPeerConnection(callRef, amICaller = false){
+async function createPeerConnection(callRef){
   pc = new RTCPeerConnection(rtcConfig);
-
-  // remote element
   remoteStream = new MediaStream();
   const remoteEl = document.getElementById('remote-video');
   if (remoteEl) remoteEl.srcObject = remoteStream;
 
-  // add local tracks
-  if (localStream) {
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-  }
+  if (localStream) localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  pc.ontrack = event => { event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track)); };
 
-  pc.ontrack = event => {
-    event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
-  };
-
-  // add ICE candidate -> write to appropriate subcollection depending on role
   pc.onicecandidate = event => {
     if (!event.candidate) return;
     const cand = event.candidate.toJSON();
-    if (!callRef || !callRef.id) return;
-    // we determine where to put candidate by reading call doc's offer/answer presence
+    // determine where to store candidate: if call doc has offer and we are the answerer, use answerCandidates, else offerCandidates.
     callRef.get().then(doc => {
-      const data = doc.data()||{};
-      // If offer exists and amICaller true -> add to offerCandidates, else use answerCandidates for answer side.
-      // Simpler detection: if amICaller true -> offerCandidates, else answerCandidates
-      const colName = amICaller ? 'offerCandidates' : 'answerCandidates';
-      callRef.collection(colName).add(cand).catch(()=>{});
+      const data = doc.data() || {};
+      if (!data.offer) {
+        // no offer yet -> we are caller adding offerCandidates
+        callRef.collection('offerCandidates').add(cand).catch(()=>{});
+      } else {
+        // offer exists -> add to answerCandidates
+        callRef.collection('answerCandidates').add(cand).catch(()=>{});
+      }
     }).catch(()=>{});
   };
-
-  // listen for remote ICE candidates inline is handled in caller/answer flows
-  return pc;
 }
 
+// Caller from customer side (starts call)
 async function startCallAsCustomer(){
   const user = firebase.auth().currentUser;
-  if (!user) return alert('Please login to start a call.');
+  if (!user) return alert('Please login to start a call');
 
-  // simple selection: choose any admin user (first)
+  // Simple strategy: find an admin user to call (first admin document in users collection)
   const adminSnap = await usersRef().where('role','==','admin').limit(1).get();
-  if (adminSnap.empty) return alert('No admin available for calls.');
+  if (adminSnap.empty) return alert('No admin available for calls right now');
+
   const adminDoc = adminSnap.docs[0];
   const calleeId = adminDoc.id;
+  const callRef = db.collection('calls').doc(); currentCallId = callRef.id;
 
-  const callRef = callsRef().doc();
-  currentCallId = callRef.id;
-
-  await callRef.set({ callerId: user.uid, calleeId, state: 'requested', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  await callRef.set({ callerId: user.uid, calleeId, state:'requested', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
 
   await prepareLocalMedia();
-  await createPeerConnection(callRef, true);
+  await createPeerConnection(callRef);
 
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+  // create offer
+  const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
   await callRef.set({ offer: { type: offer.type, sdp: offer.sdp }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
 
   // listen for answer
   callRef.onSnapshot(async snap => {
     const data = snap.data();
     if (!data) return;
-    if (data.answer && pc && !pc.currentRemoteDescription) {
+    if (data.answer && !pc.currentRemoteDescription) {
       const answer = new RTCSessionDescription(data.answer);
       await pc.setRemoteDescription(answer);
     }
     if (data.state === 'ended') hangupCall();
   });
 
-  // listen for answer candidates
+  // listen for answerCandidates
   callRef.collection('answerCandidates').onSnapshot(snap => {
-    snap.docChanges().forEach(async change => {
-      if (change.type === 'added' && change.doc.exists) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(change.doc.data())); } catch(e){ console.warn('addIceCandidate', e); }
+    snap.docChanges().forEach(async ch => {
+      if (ch.type === 'added') {
+        const c = ch.doc.data();
+        try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) { console.warn('addIce candidate error', e); }
       }
     });
   });
 
-  // write offerCandidates handled in createPeerConnection by amICaller flag
   alert('Calling admin...');
 }
 
-async function startCallAsAdmin(userId){
+// Admin listens for incoming call requests and accepts/rejects
+function listenForCallRequests(){
   const me = firebase.auth().currentUser;
-  if (!me) return alert('Login as admin to start a call.');
-  if (!userId) return alert('Select a user to call.');
-
-  const callRef = callsRef().doc();
-  currentCallId = callRef.id;
-
-  await callRef.set({ callerId: me.uid, calleeId: userId, state: 'requested', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-
-  await prepareLocalMedia();
-  await createPeerConnection(callRef, true);
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await callRef.set({ offer: { type: offer.type, sdp: offer.sdp }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
-
-  // listen for answer
-  callRef.onSnapshot(async snap => {
-    const data = snap.data();
-    if (!data) return;
-    if (data.answer && pc && !pc.currentRemoteDescription) {
-      const answer = new RTCSessionDescription(data.answer);
-      await pc.setRemoteDescription(answer);
-    }
-    if (data.state === 'ended') hangupCall();
-  });
-
-  // accept incoming candidate answers
-  callRef.collection('answerCandidates').onSnapshot(snap => {
-    snap.docChanges().forEach(async ch => {
-      if (ch.type === 'added') {
-        try { await pc.addIceCandidate(new RTCIceCandidate(ch.doc.data())); } catch(e){ console.warn('addIceCandidate', e); }
+  if (!me) return;
+  const q = db.collection('calls').where('calleeId','==', me.uid).where('state','==','requested');
+  q.onSnapshot(snap => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'added') {
+        const callId = change.doc.id;
+        const data = change.doc.data();
+        const caller = data.callerId || data.callerName || 'Customer';
+        if (confirm(`Incoming call from ${caller}. Accept?`)) answerCallAsAdmin(callId);
+        else { db.collection('calls').doc(callId).update({ state:'ended' }).catch(()=>{}); }
       }
     });
   });
@@ -620,54 +622,72 @@ async function startCallAsAdmin(userId){
 
 async function answerCallAsAdmin(callId){
   try {
-    if (!callId) return;
     await prepareLocalMedia();
-    const callRef = callsRef().doc(callId);
+    const callRef = db.collection('calls').doc(callId);
     const callDoc = await callRef.get();
     if (!callDoc.exists) return;
     const data = callDoc.data();
 
-    // create peer connection as answerer
-    await createPeerConnection(callRef, false);
+    await callRef.update({ state:'accepted', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await createPeerConnection(callRef);
 
     // set remote description from offer
     if (data.offer) {
-      await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+      const offer = new RTCSessionDescription(data.offer);
+      await pc.setRemoteDescription(offer);
     }
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await callRef.update({ answer: { type: answer.type, sdp: answer.sdp }, state: 'accepted', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+    const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+    await callRef.update({ answer: { type: answer.type, sdp: answer.sdp }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
 
     // listen for offerCandidates
     callRef.collection('offerCandidates').onSnapshot(snap => {
       snap.docChanges().forEach(async change => {
         if (change.type === 'added') {
-          try { await pc.addIceCandidate(new RTCIceCandidate(change.doc.data())); } catch(e){ console.warn('addIceCandidate', e); }
+          const c = change.doc.data();
+          try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) { console.warn('addIce', e); }
         }
       });
     });
-
-    // write answerCandidates from pc.onicecandidate created by createPeerConnection
-  } catch(e){ console.error('answerCallAsAdmin error', e); }
+  } catch (err) {
+    console.error('answerCallAsAdmin error', err);
+  }
 }
 
-async function listenForCallRequests(){
+// Admin initiates a call to a user
+async function startCallAsAdmin(userId){
   const me = firebase.auth().currentUser;
-  if (!me) return;
-  callsRef().where('calleeId','==',me.uid).where('state','==','requested').onSnapshot(snap => {
-    snap.docChanges().forEach(change => {
-      if (change.type === 'added') {
-        const data = change.doc.data();
-        const callId = change.doc.id;
-        // simple prompt - you can build custom UI instead
-        if (confirm(`Incoming call from ${data.callerId || 'Customer'}. Accept?`)) {
-          answerCallAsAdmin(callId);
-        } else {
-          callsRef().doc(callId).update({ state: 'ended' }).catch(()=>{});
-        }
+  if (!me) return alert('Login as admin to start calls');
+
+  const callRef = db.collection('calls').doc(); currentCallId = callRef.id;
+  await callRef.set({ callerId: me.uid, calleeId: userId, state:'requested', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+  await prepareLocalMedia();
+  await createPeerConnection(callRef);
+
+  const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+  await callRef.set({ offer: { type: offer.type, sdp: offer.sdp }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+
+  callRef.onSnapshot(async snap => {
+    const data = snap.data();
+    if (!data) return;
+    if (data.answer && !pc.currentRemoteDescription) {
+      const ans = new RTCSessionDescription(data.answer);
+      await pc.setRemoteDescription(ans);
+    }
+    if (data.state === 'ended') hangupCall();
+  });
+
+  callRef.collection('answerCandidates').onSnapshot(snap => {
+    snap.docChanges().forEach(async ch => {
+      if (ch.type === 'added') {
+        const c = ch.doc.data();
+        try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) { console.warn('addIce', e); }
       }
     });
   });
+
+  // now waiting for answer...
 }
 
 async function hangupCall(){
@@ -675,18 +695,24 @@ async function hangupCall(){
     if (pc) { pc.close(); pc = null; }
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
     if (remoteStream) { remoteStream.getTracks().forEach(t => t.stop()); remoteStream = null; }
-    if (currentCallId) {
-      await callsRef().doc(currentCallId).update({ state: 'ended' }).catch(()=>{});
-      currentCallId = null;
-    }
+    if (currentCallId) { await db.collection('calls').doc(currentCallId).update({ state:'ended' }).catch(()=>{}); currentCallId = null; }
     const localEl = document.getElementById('local-video'); if (localEl) localEl.srcObject = null;
     const remoteEl = document.getElementById('remote-video'); if (remoteEl) remoteEl.srcObject = null;
-    q('#btn-hangup') && (q('#btn-hangup').style.display = 'none');
-    q('#btn-call') && (q('#btn-call').style.display = 'inline-block');
-  } catch(e) { console.warn('hangupCall', e); }
+  } catch (e) { console.warn('hangup error', e); }
 }
 
-/* ---------- Auth: signup/login/logout ---------- */
+/* ---------------------- Legacy chat helper (toggleChatBox) ---------------------- */
+function toggleChatBox() {
+  const box = document.getElementById("chat-box");
+  if (!box) return;
+  box.style.display = box.style.display === "none" || box.style.display === "" ? "flex" : "none";
+  if (box.style.display === "flex") {
+    const messages = document.getElementById("chat-messages");
+    setTimeout(() => { if (messages) messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' }); }, 150);
+  }
+}
+
+/* ---------------------- Auth: signup/login/logout ---------------------- */
 async function signupUser(e){
   e.preventDefault();
   const username = (q('#signup-username')||{}).value?.trim();
@@ -713,14 +739,14 @@ async function loginUser(e){
   const email = (q('#login-username')||{}).value?.trim();
   const password = (q('#login-password')||{}).value;
   if (!email || !password) { alert('Complete fields'); return false; }
-  try { await auth.signInWithEmailAndPassword(email, password); }
+  try { await auth.signInWithEmailAndPassword(email, password); } 
   catch (err) { console.error(err); alert(err.message || 'Login failed'); }
   return false;
 }
 
 function logoutUser(){ auth.signOut(); }
 
-/* ---------- auth state & UI ---------- */
+/* ---------- auth state & UI (keeps working behavior) ---------- */
 function bindAuthState(){
   auth.onAuthStateChanged(async user => {
     const welcome = q('#welcome-user-top');
@@ -826,7 +852,6 @@ async function openProductModal(id){
     if (!doc.exists) return alert('Product not found');
     const p = { id: doc.id, ...doc.data() };
     const el = q('#product-detail');
-    if (!el) return;
     el.innerHTML = `
       <div style="display:flex;gap:18px;flex-wrap:wrap">
         <div style="flex:1;min-width:260px"><img src="${p.imgUrl || p.img || placeholderDataURL(p.title)}" style="width:100%;border-radius:10px;object-fit:cover"/></div>
@@ -887,7 +912,11 @@ function renderCartUI(){
 async function placeOrder(e){
   e.preventDefault();
   const user = auth.currentUser;
-  if(!user){ alert('Please login first'); window.location.href='login.html'; return false; }
+  if(!user){ 
+    alert('Please login first'); 
+    window.location.href='login.html'; 
+    return false; 
+  }
 
   const name = (q('#chk-name')||{}).value?.trim();
   const address = (q('#chk-address')||{}).value?.trim();
@@ -949,7 +978,11 @@ function initCustomerOrders(){
   if(!container) return;
 
   auth.onAuthStateChanged(user => {
-    if(!user){ alert('Please login to view your orders'); window.location.href = 'login.html'; return; }
+    if(!user){
+      alert('Please login to view your orders');
+      window.location.href = 'login.html';
+      return;
+    }
 
     ordersRef()
       .where('userId', '==', user.uid)
@@ -967,7 +1000,10 @@ function initCustomerOrders(){
           });
         });
 
-        if(!orders.length){ container.innerHTML = '<p>You have no orders yet.</p>'; return; }
+        if(!orders.length){
+          container.innerHTML = '<p>You have no orders yet.</p>';
+          return;
+        }
 
         container.innerHTML = orders.map(o => `
           <div class="order-card">
@@ -986,28 +1022,73 @@ function initCustomerOrders(){
   });
 }
 
+function openOrderSummary(text){
+  const modal = q('#order-summary-modal');
+  if(modal){
+    q('#summary-text').textContent = text;
+    modal.style.display='flex';
+    modal.setAttribute('aria-hidden','false');
+  }
+}
+function closeOrderSummary(){
+  const modal = q('#order-summary-modal');
+  if(modal){
+    modal.style.display='none';
+    modal.setAttribute('aria-hidden','true');
+  }
+}
+function goToOrders(){ window.location.href='orders.html'; }
+
 /* ---------- Admin ---------- */
 let adminProducts=[];
 function initAdmin(){
   if(!q('#admin-product-list')) return;
 
-  productsRef().orderBy('createdAt','desc').onSnapshot(snap=>{ const arr=[]; snap.forEach(d=>arr.push({id:d.id,...d.data()})); adminProducts=arr; renderAdminProducts(); });
+  productsRef().orderBy('createdAt','desc').onSnapshot(snap=>{
+    const arr=[]; snap.forEach(d=>arr.push({id:d.id,...d.data()})); adminProducts=arr;
+    renderAdminProducts();
+  });
+
   renderAdminProducts();
-  initAdminOrders();
+  initAdminOrders(); // load admin orders table
 }
 
 function renderAdminProducts(){
-  const container = q('#admin-product-list'); if(!container) return;
+  const container = q('#admin-product-list'); 
+  if(!container) return;
   const search = (q('#admin-search')||{}).value?.trim().toLowerCase();
   let list = adminProducts;
-  if(search) list = list.filter(p => p.title.toLowerCase().includes(search) || (p.category || '').toLowerCase().includes(search));
+  if(search) list = list.filter(p => 
+    p.title.toLowerCase().includes(search) || 
+    (p.category || '').toLowerCase().includes(search)
+  );
+
   container.innerHTML = list.map(p=>{
-    const imgSrc = p.imgUrl || placeholderDataURL(p.title);
+    const imgSrc = p.imgUrl || placeholderDataURL(p.title); // ensure imgUrl is used
     return `
-      <div class="admin-item" style="display:flex; align-items:center; gap:12px; padding:12px; border-bottom:1px solid #333; background:#111; color:#eee; border-radius:8px;">
-        <div style="flex:0 0 100px;"><img src="${imgSrc}" alt="${escapeHtml(p.title)}" style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:1px solid #444;"></div>
-        <div style="flex:1; display:flex; flex-direction:column; gap:4px;"><strong>${escapeHtml(p.title)}</strong><div>${money(p.price)}</div><div style="opacity:0.7">${escapeHtml(p.category)}</div></div>
-        <div style="flex:0 0 auto; display:flex; gap:8px;"><button class="btn small" onclick="editProduct('${p.id}')">Edit</button><button class="btn ghost small" onclick="deleteProduct('${p.id}')">Delete</button></div>
+      <div class="admin-item" style="
+          display:flex; 
+          align-items:center; 
+          gap:12px; 
+          padding:12px; 
+          border-bottom:1px solid #333;
+          background:#111;
+          color:#eee;
+          border-radius:8px;
+        ">
+        <div style="flex:0 0 100px;">
+          <img src="${imgSrc}" alt="${escapeHtml(p.title)}" 
+               style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:1px solid #444;">
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+          <strong>${escapeHtml(p.title)}</strong>
+          <div>${money(p.price)}</div>
+          <div style="opacity:0.7">${escapeHtml(p.category)}</div>
+        </div>
+        <div style="flex:0 0 auto; display:flex; gap:8px;">
+          <button class="btn small" onclick="editProduct('${p.id}')">Edit</button>
+          <button class="btn ghost small" onclick="deleteProduct('${p.id}')">Delete</button>
+        </div>
       </div>
     `;
   }).join('');
@@ -1052,6 +1133,7 @@ async function editProduct(id){
 
 async function deleteProduct(id){ if(!confirm('Delete this product?')) return; try{ await productsRef().doc(id).delete(); } catch(err){ console.error(err); alert('Delete failed'); } }
 
+/* ---------- Admin Orders Management ---------- */
 function initAdminOrders(){
   const tbody = q('#admin-orders'); if(!tbody) return;
   ordersRef().orderBy('createdAt','desc').onSnapshot(snapshot=>{
@@ -1059,7 +1141,12 @@ function initAdminOrders(){
     snapshot.forEach(doc=>{
       const o = {id: doc.id, ...doc.data()};
       const items = o.items.map(i=>`${i.title} ×${i.qty}`).join('<br>');
-      const statusColor = { 'Pending':'orange','Processing':'blue','Shipped':'purple','Delivered':'green' }[o.status] || 'gray';
+      const statusColor = {
+        'Pending':'orange',
+        'Processing':'blue',
+        'Shipped':'purple',
+        'Delivered':'green'
+      }[o.status] || 'gray';
       rows.push(`
         <tr>
           <td>${o.id}</td>
@@ -1067,7 +1154,9 @@ function initAdminOrders(){
           <td>${items}</td>
           <td>${money(o.total)}</td>
           <td style="color:${statusColor};font-weight:bold">${o.status}</td>
-          <td>${o.status!=='Delivered'?`<button class="btn small" onclick="advanceOrder('${o.id}')">Next Stage</button>`:''}</td>
+          <td>
+            ${o.status!=='Delivered'?`<button class="btn small" onclick="advanceOrder('${o.id}')">Next Stage</button>`:''}
+          </td>
         </tr>
       `);
     });
@@ -1088,15 +1177,4 @@ async function advanceOrder(id){
 /* ---------- Footer ---------- */
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
 
-/* ---------- Small helper for quick-replies in admin UI ---------- */
-function insertQuickReply(text){
-  const el = document.getElementById('admin-chat-input');
-  if (!el) return;
-  el.value = text;
-  el.focus();
-}
-
-/* ---------- Start global init for admin page (recalculate notifications) ---------- */
-window.addEventListener('load', () => {
-  // nothing extra here — page load logic lives above
-});
+/* ---------- End of script.js ---------- */
