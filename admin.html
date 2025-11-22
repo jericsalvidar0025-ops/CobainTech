@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Admin Dashboard — CobainTech</title>
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css">
 <style>
 /* ---------------- Global ---------------- */
 body { margin:0; font-family:'Segoe UI',Roboto,sans-serif; background:#0b0c0e; color:#eee; }
@@ -20,8 +20,8 @@ header { background:#111; padding:12px 24px; display:flex; justify-content:space
 
 /* ---------------- Layout ---------------- */
 .container { display:flex; height:calc(100vh - 60px); }
-nav.sidebar { width:260px; background:#111; padding:16px; display:flex; flex-direction:column; box-shadow:2px 0 6px rgba(0,0,0,0.5); }
-nav.sidebar button { background:none; border:none; color:#eee; text-align:left; padding:12px; margin-bottom:8px; border-radius:6px; font-size:1rem; transition:0.2s; position:relative; }
+nav.sidebar { width:250px; background:#111; padding:16px; display:flex; flex-direction:column; box-shadow:2px 0 6px rgba(0,0,0,0.5); }
+nav.sidebar button { background:none; border:none; color:#eee; text-align:left; padding:12px; margin-bottom:8px; border-radius:6px; font-size:1rem; transition:0.2s; display:flex; align-items:center; justify-content:space-between; }
 nav.sidebar button.active, nav.sidebar button:hover { background:#3498db; color:#fff; }
 main.content { flex:1; padding:24px; overflow-y:auto; }
 
@@ -38,21 +38,18 @@ button.small { padding:6px 12px; border-radius:6px; font-size:.85rem; }
 input, select { background:#1a1a1a; color:#eee; border:1px solid #444; border-radius:6px; padding:6px 10px; width:100%; margin-bottom:12px; }
 label { display:block; margin-bottom:6px; font-weight:600; }
 
-/* ---------------- Chat / Call Styles ---------------- */
-
-/* user list & avatars */
+/* ---------------- Chat UI ---------------- */
 .user-btn {
   display:flex;
-  gap:12px;
+  gap:10px;
   align-items:center;
   padding:10px;
-  background:#0f1113;
+  background:#111;
   border-radius:8px;
   border:1px solid #1b1b1b;
   color:#eee;
   cursor:pointer;
   text-align:left;
-  width:100%;
 }
 .user-btn:hover { background:#17202a; transform:translateY(-1px); }
 .user-avatar {
@@ -63,23 +60,15 @@ label { display:block; margin-bottom:6px; font-weight:600; }
 .user-last { font-size:0.85rem; color:#9b9b9b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; }
 .user-badge { margin-left:auto; background:#e74c3c; color:#fff; font-size:0.8rem; padding:4px 8px; border-radius:999px; }
 
-/* chat panel */
 .bubble-admin { align-self:flex-end; background:#3498db; color:#fff; padding:8px 12px; border-radius:12px; max-width:75%; }
 .bubble-customer { align-self:flex-start; background:#1f2226; color:#fff; padding:8px 12px; border-radius:12px; max-width:75%; }
 .msg-time { font-size:0.75rem; color:#9b9b9b; margin-top:4px; align-self:flex-end; }
 
-/* small helpers */
-.hidden { display:none !important; }
-
-/* video elements */
-.video-wrap { display:flex; gap:8px; align-items:center; }
-video { width:200px; height:120px; background:#000; border-radius:8px; object-fit:cover; }
-
-/* chat search input smaller */
-#chat-search { width:220px; }
-
-/* chat notif badge in sidebar */
-#chat-notif { position:absolute; right:14px; top:8px; display:none; background:#e74c3c; color:#fff; padding:4px 8px; border-radius:999px; font-size:0.85rem; }
+/* small responsive tweaks */
+@media(max-width:900px){
+  nav.sidebar{ display:none; }
+  .container { flex-direction:column; height:100vh; }
+}
 </style>
 </head>
 <body>
@@ -116,26 +105,14 @@ video { width:200px; height:120px; background:#000; border-radius:8px; object-fi
 .btn-logout:hover { background: #c0392b; }
 </style>
 
-<script>
-// Redefine logout after Firebase loads
-window.addEventListener('load', () => {
-  window.logoutUser = function() {
-    if (window.firebase && firebase.auth) {
-      firebase.auth().signOut().then(()=>{ window.location.href = 'index.html'; }).catch(err=>{ console.error(err); alert('Logout failed'); });
-    } else { alert('Firebase not ready'); }
-  };
-});
-</script>
-
 <div class="container">
   <nav class="sidebar">
     <button class="active" onclick="showTab('products')">Products</button>
     <button onclick="showTab('orders')">Orders</button>
     <button onclick="showTab('sales')">Sales</button>
     <button onclick="showTab('settings')">Settings</button>
-    <button onclick="showTab('chat')" style="position:relative;">
-      Chat
-      <span id="chat-notif">0</span>
+    <button onclick="showTab('chat')" id="chat-sidebar-btn">Chat
+      <span id="chat-notif" style="display:none;background:#e74c3c;color:#fff;padding:4px 8px;border-radius:999px;font-size:0.8rem;margin-left:8px;"></span>
     </button>
   </nav>
 
@@ -165,7 +142,7 @@ window.addEventListener('load', () => {
       <div id="admin-product-list" class="product-grid"></div>
     </section>
 
-    <!-- ---------------- Admin Chat (FULL) ---------------- -->
+    <!-- Chat Tab (complete) -->
     <section id="tab-chat" style="display:none;">
       <div class="card" style="padding:14px; display:flex; flex-direction:column; height:600px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;">
@@ -178,7 +155,7 @@ window.addEventListener('load', () => {
 
         <div style="display:flex; gap:12px; flex:1; min-height:0; overflow:hidden;">
           <!-- left: users -->
-          <div id="chat-users" style="width:320px; background:#0f1113; border-radius:12px; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px;">
+          <div id="chat-users" style="width:320px; background:#0f1113; border-radius:12px; padding:8px; overflow:auto; display:flex; flex-direction:column; gap:8px;">
             <div style="padding:12px;color:#999">Loading users…</div>
           </div>
 
@@ -216,10 +193,10 @@ window.addEventListener('load', () => {
               <button class="btn ghost" onclick="insertQuickReply('Can you share a photo of the issue?')">Quick: Ask photo</button>
             </div>
 
-            <!-- Optional video preview area for calls (script will show/hide as needed) -->
-            <div id="call-videos" style="display:flex; gap:12px; align-items:center;">
-              <video id="local-video" autoplay muted playsinline class="hidden"></video>
-              <video id="remote-video" autoplay playsinline class="hidden"></video>
+            <!-- Hidden video elements used by the call system (if script supports it) -->
+            <div style="display:flex; gap:10px; margin-top:8px; align-items:center;">
+              <video id="local-video" autoplay muted playsinline style="width:120px;height:90px;border-radius:8px;background:#000;display:none;"></video>
+              <video id="remote-video" autoplay playsinline style="width:120px;height:90px;border-radius:8px;background:#000;display:none;"></video>
             </div>
           </div>
         </div>
@@ -297,38 +274,31 @@ window.addEventListener('load', () => {
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-<!-- YOUR uploaded script (the page expects your script code to be served via your environment).
-     Developer note: the local upload path is included below per your environment setup. -->
-<script src="sandbox:/mnt/data/script (3).js"></script>
+<!-- Use your working script file (uploaded). DON'T change this path unless you replace the file. -->
+<script src="/mnt/data/script (3).js"></script>
 
 <script>
-/* small helpers used by the UI that also match the script */
-function showTab(tab){
-  ['products','orders','sales','settings','chat'].forEach(t=>{
-    const el = document.getElementById('tab-'+t);
-    if (el) el.style.display = (t === tab) ? 'block' : 'none';
-    document.querySelectorAll('.sidebar button').forEach(btn=>{
-      if (btn.textContent.toLowerCase() === t) btn.classList.toggle('active', t === tab);
-    });
-  });
+// Keep your existing JS calls intact; this small snippet wires a few UI convenience behaviors.
 
-  if (tab === 'chat') {
-    // focus search input a bit after the tab opens
-    setTimeout(()=>{ const s=document.getElementById('chat-search'); if(s) s.focus(); }, 200);
-  }
+window.addEventListener('load', () => {
+  // ensure chat notif badge is wired
+  const chatBtn = document.getElementById('chat-sidebar-btn');
+  if (chatBtn) chatBtn.addEventListener('click', ()=>{ showTab('chat'); });
 
-  if (tab === 'settings') {
-    if (typeof loadSettings === 'function') loadSettings();
-  }
-}
+  // Quick behaviour: when a user row is clicked (rendered by script.js) it calls openAdminChat(uid).
+  // Make sure the script.js you're using exposes openAdminChat(), adminSendChat(), startCallToSelectedUser(), hangupCall(), insertQuickReply().
 
-/* Quick-reply helper used in this admin page */
-function insertQuickReply(text){
-  const input = document.getElementById('admin-chat-input');
-  if (!input) return;
-  input.value = text;
-  input.focus();
-}
+  // Expose helper used by quick-replies
+  window.insertQuickReply = function(text){
+    const el = document.getElementById('admin-chat-input');
+    if(!el) return;
+    el.value = text;
+    el.focus();
+  };
+
+  // When admin opens chat, ensure video elements are visible when call starts (script handles showing/hiding)
+  // Nothing else to change here.
+});
 </script>
 
 </body>
