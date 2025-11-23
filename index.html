@@ -35,6 +35,7 @@
         <a id="signup-link" href="signup.html" class="btn small">Sign Up</a>
         <a id="admin-link" href="admin.html" class="btn small ghost" style="display:none">Admin</a>
         <button id="cart-btn" class="cart-btn" aria-label="Open cart">🛍️ <span id="cart-count">0</span></button>
+        <button id="call-store-btn" class="btn primary">📞 Call Store</button>
       </nav>
     </div>
   </header>
@@ -44,7 +45,16 @@
       <!-- Products from Firestore will be injected here -->
     </section>
   </main>
-
+<!-- Call Panel -->
+<div id="call-panel" class="call-panel" style="display:none;">
+  <div class="call-header">
+    <span id="call-status">Calling Store...</span>
+    <button onclick="hangUpCall()" class="call-end">✕</button>
+  </div>
+  <div class="call-body">
+    <audio id="remote-audio" autoplay></audio>
+  </div>
+</div>
   <!-- Cart panel -->
   <aside id="cart-panel" class="cart-panel" aria-hidden="true">
     <div class="cart-head">
@@ -144,6 +154,66 @@
 </div>
 
 <style>
+
+  /* Floating Call Button */
+.call-toggle {
+  position: fixed;
+  bottom: 90px;
+  right: 25px;
+  background: #2ecc71;
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  padding: 16px 20px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 5px 15px rgba(0,0,0,.3);
+  z-index: 9999;
+}
+
+/* Call Panel */
+.call-panel {
+  position: fixed;
+  bottom: 150px;
+  right: 25px;
+  width: 300px;
+  height: 120px;
+  background: #111;
+  border-radius: 12px;
+  box-shadow: 0 5px 20px rgba(0,0,0,.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+.call-header {
+  background: #222;
+  padding: 10px;
+  color: #fff;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.call-body {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.call-end {
+  background: #e74c3c;
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
 /* Floating button */
 .chat-toggle {
   position: fixed;
@@ -227,6 +297,7 @@
   <script src="script.js"></script>
 </body>
 </html>
+
 
 
 
