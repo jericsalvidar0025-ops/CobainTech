@@ -48,23 +48,100 @@ const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }; //
 let localStream = null;
 let remoteStream = null;
 let pc = null;
-let currentCallId = null;
 
-/* ---------------------- Chat (upgraded: names, unread, typing, notifications) ---------------------- */
+// Call-related globals
+let peerConnection = null;
+let callDoc = null;
+const servers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+let currentCallUserId = null;
 
-/*
-Data model:
-- chats (collection)
-  - {userId} (doc) { userId, name, updatedAt, unreadForAdmin: bool, typing: bool }
-    - messages (subcollection)
-      - {auto-id} { sender: 'customer'|'admin', message: string, timestamp: Timestamp, readByAdmin: bool, readByCustomer: bool }
 
-Notes:
-- Uses compat SDK (firebase.auth(), firebase.firestore()) as in your project.
-- Make sure 'users' collection contains username fields (optional) for fallback.
-*/
+async function startCallToSelectedUser() {
+    const userId = getSelectedUserId(); // Implement this to get the currently selected customer ID
+    if (!userId) { alert("Select a customer first."); return; }
+    currentCallUserId = userId;
 
-// initChat: sets up listeners for customer (store) and admin (dashboard)
+    // Create a new call document in Firestore
+    callDoc = db.collection('calls').doc();
+    const offerCandidates = callDoc.collection('offerCandidates');
+    const answerCandidates = callDoc.collection('answerCandidates');
+
+    // Get microphone access
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    // Create peer connection
+    peerConnection = new RTCPeerConnection(servers);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+    // Collect ICE candidates and send to Firestore
+    peerConnection.onicecandidate = event => {
+        if (event.candidate) offerCandidates.add(event.candidate.toJSON());
+    };
+
+    // Handle remote stream
+    peerConnection.ontrack = event => {
+        const remoteAudio = document.getElementById('remote-audio');
+        if (!remoteAudio) {
+            const audioEl = document.createElement('audio');
+            audioEl.id = 'remote-audio';
+            audioEl.autoplay = true;
+            audioEl.srcObject = event.streams[0];
+            document.body.appendChild(audioEl);
+        }
+    };
+
+    // Create offer
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+
+    // Save offer to Firestore
+    await callDoc.set({
+        offer: { type: offer.type, sdp: offer.sdp },
+        from: auth.currentUser.uid,
+        to: userId,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Listen for answer
+    callDoc.onSnapshot(snapshot => {
+        const data = snapshot.data();
+        if (!peerConnection.currentRemoteDescription && data?.answer) {
+            const answer = new RTCSessionDescription(data.answer);
+            peerConnection.setRemoteDescription(answer);
+        }
+    });
+
+    // Listen for remote ICE candidates
+    answerCandidates.onSnapshot(snapshot => {
+        snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+                const candidate = new RTCIceCandidate(change.doc.data());
+                peerConnection.addIceCandidate(candidate);
+            }
+        });
+    });
+
+    document.getElementById('btn-call').style.display = 'none';
+    document.getElementById('btn-hangup').style.display = 'inline-block';
+}
+
+function hangupCall() {
+    if (peerConnection) peerConnection.close();
+    if (localStream) localStream.getTracks().forEach(track => track.stop());
+    if (callDoc) callDoc.delete();
+
+    peerConnection = null;
+    localStream = null;
+    callDoc = null;
+    currentCallUserId = null;
+
+    document.getElementById('btn-call').style.display = 'inline-block';
+    document.getElementById('btn-hangup').style.display = 'none';
+    const remoteAudio = document.getElementById('remote-audio');
+    if (remoteAudio) remoteAudio.remove();
+}
+
+
 function initChat(){
   auth.onAuthStateChanged(user => {
     // Store (customer) view
@@ -1178,3 +1255,4 @@ async function advanceOrder(id){
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
 
 /* ---------- End of script.js ---------- */
+
