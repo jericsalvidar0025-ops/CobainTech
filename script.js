@@ -63,6 +63,131 @@ Notes:
 - Uses compat SDK (firebase.auth(), firebase.firestore()) as in your project.
 - Make sure 'users' collection contains username fields (optional) for fallback.
 */
+let localStreamUser, pcUser, callDocUser;
+
+// Toggle call panel visibility
+const callPanel = document.getElementById('call-panel');
+const callToggleBtn = document.getElementById('call-toggle-btn');
+
+callToggleBtn.onclick = () => {
+  callPanel.style.display = callPanel.style.display === 'none' ? 'flex' : 'none';
+};
+
+// Start call to store
+async function callStore() {
+  callPanel.style.display = 'flex';
+  document.getElementById('call-status').textContent = "Calling Store...";
+
+  localStreamUser = await navigator.mediaDevices.getUserMedia({ audio: true });
+  pcUser = new RTCPeerConnection();
+
+  // Add local tracks
+  localStreamUser.getTracks().forEach(track => pcUser.addTrack(track, localStreamUser));
+
+  // Remote audio
+  const remoteAudio = document.getElementById('remote-audio');
+  pcUser.ontrack = e => { remoteAudio.srcObject = e.streams[0]; };
+
+  // Firestore signaling
+  callDocUser = db.collection('calls').doc();
+  const offerCandidates = callDocUser.collection('offerCandidates');
+  const answerCandidates = callDocUser.collection('answerCandidates');
+
+  pcUser.onicecandidate = e => { if(e.candidate) offerCandidates.add(e.candidate.toJSON()); };
+
+  const offerDescription = await pcUser.createOffer();
+  await pcUser.setLocalDescription(offerDescription);
+  await callDocUser.set({ offer: { type: offerDescription.type, sdp: offerDescription.sdp } });
+
+  // Listen for admin answer
+  callDocUser.onSnapshot(snapshot => {
+    const data = snapshot.data();
+    if(!pcUser.currentRemoteDescription && data?.answer){
+      const answerDesc = new RTCSessionDescription(data.answer);
+      pcUser.setRemoteDescription(answerDesc);
+      document.getElementById('call-status').textContent = "Connected to Store";
+    }
+  });
+
+  // Listen for ICE candidates from admin
+  answerCandidates.onSnapshot(snapshot => {
+    snapshot.docChanges().forEach(change => {
+      if(change.type === 'added') pcUser.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+    });
+  });
+}
+
+// Hang up the call
+function hangUpCall(){
+  if(pcUser){ pcUser.close(); pcUser = null; }
+  if(localStreamUser){ localStreamUser.getTracks().forEach(t => t.stop()); }
+  if(callDocUser) callDocUser.delete();
+  callPanel.style.display = 'none';
+  document.getElementById('call-status').textContent = "Call Ended";
+}
+
+// Attach call button
+callToggleBtn.onclick = callStore;
+
+
+  // Listen for ICE candidates from admin
+  answerCandidates.onSnapshot(snapshot => {
+    snapshot.docChanges().forEach(change => {
+      if(change.type==='added') pcUser.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+    });
+  });
+}
+
+document.getElementById('call-store-btn').onclick = callStore;
+
+let pcAdmin, localStreamAdmin;
+
+function initCallListener() {
+  db.collection('calls').onSnapshot(snapshot => {
+    snapshot.docChanges().forEach(change => {
+      if(change.type === 'added'){
+        const callData = change.doc.data();
+        const callId = change.doc.id;
+        if(callData.offer) showIncomingCall(callId, callData.offer);
+      }
+    });
+  });
+}
+
+async function showIncomingCall(callId, offer){
+  if(!confirm("Incoming call from a customer. Accept?")) return;
+  await handleAdminCall(callId, offer);
+}
+
+async function handleAdminCall(callId, offer){
+  localStreamAdmin = await navigator.mediaDevices.getUserMedia({ audio: true });
+  pcAdmin = new RTCPeerConnection();
+  localStreamAdmin.getTracks().forEach(track => pcAdmin.addTrack(track, localStreamAdmin));
+
+  const remoteAudio = document.createElement('audio');
+  remoteAudio.autoplay = true;
+  pcAdmin.ontrack = e => { remoteAudio.srcObject = e.streams[0]; };
+  document.body.appendChild(remoteAudio);
+
+  const callRef = db.collection('calls').doc(callId);
+  const offerCandidates = callRef.collection('offerCandidates');
+  const answerCandidates = callRef.collection('answerCandidates');
+
+  pcAdmin.onicecandidate = e => { if(e.candidate) answerCandidates.add(e.candidate.toJSON()); };
+
+  await pcAdmin.setRemoteDescription(new RTCSessionDescription(offer));
+  const answerDescription = await pcAdmin.createAnswer();
+  await pcAdmin.setLocalDescription(answerDescription);
+  await callRef.update({ answer: { type: answerDescription.type, sdp: answerDescription.sdp } });
+
+  // Listen for ICE candidates from user
+  offerCandidates.onSnapshot(snapshot => {
+    snapshot.docChanges().forEach(change => {
+      if(change.type==='added') pcAdmin.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+    });
+  });
+}
+
 
 // initChat: sets up listeners for customer (store) and admin (dashboard)
 function initChat(){
@@ -1178,3 +1303,4 @@ async function advanceOrder(id){
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
 
 /* ---------- End of script.js ---------- */
+
