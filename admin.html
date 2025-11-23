@@ -1,305 +1,556 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin Dashboard — CobainTech</title>
-<link rel="stylesheet" href="style.css">
-<style>
-/* ---------------- Global ---------------- */
-body { margin:0; font-family:'Segoe UI',Roboto,sans-serif; background:#0b0c0e; color:#eee; }
-a { color:inherit; text-decoration:none; }
-h1,h2,h3,h4,h5,h6 { margin:0; }
-button { cursor:pointer; }
-
-/* ---------------- Header ---------------- */
-header { background:#111; padding:12px 24px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.5);}
-.brand { font-weight:bold; font-size:1.5rem; color:#fff; }
-.header-actions button { background:#3498db; border:none; color:#fff; padding:8px 16px; border-radius:6px; transition:0.2s; }
-.header-actions button:hover { background:#2980b9; }
-
-/* ---------------- Layout ---------------- */
-.container { display:flex; height:calc(100vh - 60px); }
-nav.sidebar { width:250px; background:#111; padding:16px; display:flex; flex-direction:column; box-shadow:2px 0 6px rgba(0,0,0,0.5); }
-nav.sidebar button { background:none; border:none; color:#eee; text-align:left; padding:12px; margin-bottom:8px; border-radius:6px; font-size:1rem; transition:0.2s; display:flex; align-items:center; justify-content:space-between; }
-nav.sidebar button.active, nav.sidebar button:hover { background:#3498db; color:#fff; }
-main.content { flex:1; padding:24px; overflow-y:auto; }
-
-/* ---------------- Cards & Tables ---------------- */
-.card { background:#111; padding:16px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.5); margin-bottom:24px; }
-table { width:100%; border-collapse:collapse; margin-top:12px; }
-th, td { padding:12px; text-align:left; }
-th { background:#222; font-weight:600; }
-tr:nth-child(even) { background:#1a1a1a; }
-tr:hover { background:#2c3e50; }
-button.small { padding:6px 12px; border-radius:6px; font-size:.85rem; }
-
-/* ---------------- Inputs ---------------- */
-input, select { background:#1a1a1a; color:#eee; border:1px solid #444; border-radius:6px; padding:6px 10px; width:100%; margin-bottom:12px; }
-label { display:block; margin-bottom:6px; font-weight:600; }
-
-/* ---------------- Chat UI ---------------- */
-.user-btn {
-  display:flex;
-  gap:10px;
-  align-items:center;
-  padding:10px;
-  background:#111;
-  border-radius:8px;
-  border:1px solid #1b1b1b;
-  color:#eee;
-  cursor:pointer;
-  text-align:left;
-}
-.user-btn:hover { background:#17202a; transform:translateY(-1px); }
-.user-avatar {
-  width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:#3498db;flex-shrink:0;
-}
-.user-meta { display:flex; flex-direction:column; align-items:flex-start; min-width:0; }
-.user-name { font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; }
-.user-last { font-size:0.85rem; color:#9b9b9b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; }
-.user-badge { margin-left:auto; background:#e74c3c; color:#fff; font-size:0.8rem; padding:4px 8px; border-radius:999px; }
-
-.bubble-admin { align-self:flex-end; background:#3498db; color:#fff; padding:8px 12px; border-radius:12px; max-width:75%; }
-.bubble-customer { align-self:flex-start; background:#1f2226; color:#fff; padding:8px 12px; border-radius:12px; max-width:75%; }
-.msg-time { font-size:0.75rem; color:#9b9b9b; margin-top:4px; align-self:flex-end; }
-
-/* small responsive tweaks */
-@media(max-width:900px){
-  nav.sidebar{ display:none; }
-  .container { flex-direction:column; height:100vh; }
-}
-</style>
-</head>
-<body>
-
-<header>
-  <div class="brand">CobainTech Admin</div>
-  <div class="header-actions" style="display:flex;align-items:center;gap:10px;">
-    <span id="welcome-user-top" style="margin-right:10px;"></span>
-
-    <!-- Store Button -->
-    <button onclick="window.open('index.html','_blank')" class="btn-store">
-      🏬 Store
-    </button>
-
-    <!-- Logout Button -->
-    <button onclick="logoutUser()" class="btn-logout">
-      🔒 Logout
-    </button>
-  </div>
-</header>
-
-<style>
-.btn-store, .btn-logout {
-  background: #3498db;
-  border: none;
-  color: #fff;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-weight: 500;
-  transition: background 0.2s;
-}
-.btn-store:hover { background: #2980b9; }
-.btn-logout { background: #e74c3c; }
-.btn-logout:hover { background: #c0392b; }
-</style>
-
-<div class="container">
-  <nav class="sidebar">
-    <button class="active" onclick="showTab('products')">Products</button>
-    <button onclick="showTab('orders')">Orders</button>
-    <button onclick="showTab('sales')">Sales</button>
-    <button onclick="showTab('settings')">Settings</button>
-    <button onclick="showTab('chat')" id="chat-sidebar-btn">Chat
-      <span id="chat-notif" style="display:none;background:#e74c3c;color:#fff;padding:4px 8px;border-radius:999px;font-size:0.8rem;margin-left:8px;"></span>
-    </button>
-  </nav>
-
-  <main class="content">
-    <!-- Products Tab -->
-    <section id="tab-products">
-      <div class="card">
-        <button onclick="showAddProduct()" class="btn primary">Add Product</button>
-        <div id="product-form-area">
-          <h3 id="product-form-title">Add Product</h3>
-          <form id="product-form" onsubmit="saveProduct(event)">
-            <input type="hidden" id="p-id">
-            <label>Title <input id="p-title" required></label>
-            <label>Price <input type="number" id="p-price" required></label>
-            <label>Stock <input type="number" id="p-stock" required></label>
-            <label>Category <input id="p-category" required></label>
-            <label>Description <input id="p-desc"></label>
-            <label>Image URL <input id="p-image-url" placeholder="https://example.com/image.jpg"></label>
-            <div style="display:flex;gap:8px;">
-              <button type="submit" class="btn primary">Save</button>
-              <button type="button" class="btn ghost" onclick="hideProductForm()">Cancel</button>
-            </div>
-          </form>
-        </div>
-      </div>
-      <input id="admin-search" placeholder="Search products..." oninput="renderAdminProducts()">
-      <div id="admin-product-list" class="product-grid"></div>
-    </section>
-
-    <!-- Chat Tab (complete) -->
-    <section id="tab-chat" style="display:none;">
-      <div class="card" style="padding:14px; display:flex; flex-direction:column; height:600px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;">
-          <h3 style="margin:0">Customer Messages</h3>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input id="chat-search" placeholder="Search customers..." style="padding:8px 10px; border-radius:8px; border:1px solid #333; background:#0b0c0e; color:#eee;" />
-            <button onclick="showTab('products')" class="btn small">Back</button>
-          </div>
-        </div>
-
-        <div style="display:flex; gap:12px; flex:1; min-height:0; overflow:hidden;">
-          <!-- left: users -->
-          <div id="chat-users" style="width:320px; background:#0f1113; border-radius:12px; padding:8px; overflow:auto; display:flex; flex-direction:column; gap:8px;">
-            <div style="padding:12px;color:#999">Loading users…</div>
-          </div>
-
-          <!-- right: chat panel -->
-          <div style="flex:1; display:flex; flex-direction:column; min-width:0; gap:10px;">
-            <div id="chat-panel-header" style="background:#0f1113; padding:12px; border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
-              <div style="display:flex;gap:12px;align-items:center;">
-                <div id="chat-avatar" style="width:48px;height:48px;border-radius:50%;background:#3498db;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;">U</div>
-                <div>
-                  <div id="chat-with" style="font-weight:700;color:#fff">Select a customer</div>
-                  <div id="chat-last-seen" style="font-size:0.8rem;color:#9b9b9b">—</div>
-                </div>
-              </div>
-
-              <div style="display:flex;gap:8px;align-items:center;">
-                <button id="btn-call" class="btn small" onclick="startCallToSelectedUser()">📞 Call</button>
-                <button id="btn-hangup" class="btn small" style="display:none;background:#e74c3c;color:#fff" onclick="hangupCall()">Hang up</button>
-              </div>
-            </div>
-
-            <div id="chat-admin-messages" style="flex:1; background:#070708; border-radius:8px; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px;">
-              <div style="color:#9b9b9b">Open a chat to view messages.</div>
-            </div>
-
-            <div id="chat-typing" style="min-height:18px;color:#9b9b9b;font-size:0.9rem"></div>
-
-            <div style="display:flex; gap:8px;">
-              <input id="admin-chat-input" placeholder="Type a message..." style="flex:1; padding:10px 12px; border-radius:20px; border:1px solid #333; background:#0b0c0e; color:#eee;">
-              <button class="btn primary" onclick="adminSendChat()">Send</button>
-            </div>
-
-            <div style="display:flex; gap:8px; margin-top:6px;">
-              <button class="btn ghost" onclick="insertQuickReply('Hello! How can I help you today?')">Quick: Hello</button>
-              <button class="btn ghost" onclick="insertQuickReply('Your order is being processed. I will update you soon.')">Quick: Order update</button>
-              <button class="btn ghost" onclick="insertQuickReply('Can you share a photo of the issue?')">Quick: Ask photo</button>
-            </div>
-
-            <!-- Hidden video elements used by the call system (if script supports it) -->
-            <div style="display:flex; gap:10px; margin-top:8px; align-items:center;">
-              <video id="local-video" autoplay muted playsinline style="width:120px;height:90px;border-radius:8px;background:#000;display:none;"></video>
-              <video id="remote-video" autoplay playsinline style="width:120px;height:90px;border-radius:8px;background:#000;display:none;"></video>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Orders Tab -->
-    <section id="tab-orders" style="display:none">
-      <div class="card">
-        <h3>Orders</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Order ID</th>
-              <th>Customer</th>
-              <th>Items</th>
-              <th>Total</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="admin-orders"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- Sales Tab -->
-    <section id="tab-sales" style="display:none">
-      <div class="card">
-        <h3>Sales Overview</h3>
-        <div class="sales-metrics">
-          <div class="metric">
-            <h3>Total Revenue</h3>
-            <p id="total-revenue">₱0</p>
-          </div>
-          <div class="metric">
-            <h3>Total Orders</h3>
-            <p id="total-orders">0</p>
-          </div>
-        </div>
-        <canvas id="salesChart" height="250"></canvas>
-      </div>
-    </section>
-
-    <!-- Settings Tab -->
-    <section id="tab-settings" style="display:none">
-      <div class="card">
-        <h3>Store Settings</h3>
-        <form id="settings-form" onsubmit="saveSettings(event)">
-          <label>Store Name
-            <input id="store-name" placeholder="CobainTech">
-          </label>
-          <label>Store Logo URL
-            <input id="store-logo" placeholder="https://example.com/logo.png">
-          </label>
-          <label>Contact Email
-            <input id="store-email" placeholder="support@cobaintech.com">
-          </label>
-          <label>Contact Phone
-            <input id="store-phone" placeholder="+63 900 000 0000">
-          </label>
-          <button type="submit" class="btn primary">Save Settings</button>
-        </form>
-      </div>
-    </section>
-
-  </main>
-</div>
-
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<!-- Firebase SDKs -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-<!-- Use your working script file (uploaded). DON'T change this path unless you replace the file. -->
-<script src="/mnt/data/script (3).js"></script>
-
-<script>
-// Keep your existing JS calls intact; this small snippet wires a few UI convenience behaviors.
-
-window.addEventListener('load', () => {
-  // ensure chat notif badge is wired
-  const chatBtn = document.getElementById('chat-sidebar-btn');
-  if (chatBtn) chatBtn.addEventListener('click', ()=>{ showTab('chat'); });
-
-  // Quick behaviour: when a user row is clicked (rendered by script.js) it calls openAdminChat(uid).
-  // Make sure the script.js you're using exposes openAdminChat(), adminSendChat(), startCallToSelectedUser(), hangupCall(), insertQuickReply().
-
-  // Expose helper used by quick-replies
-  window.insertQuickReply = function(text){
-    const el = document.getElementById('admin-chat-input');
-    if(!el) return;
-    el.value = text;
-    el.focus();
-  };
-
-  // When admin opens chat, ensure video elements are visible when call starts (script handles showing/hiding)
-  // Nothing else to change here.
-});
-</script>
-
-</body>
-</html>
+<!DOCTYPE html> 
+<html lang="en"> 
+<head> 
+<meta charset="utf-8"> 
+<meta name="viewport" content="width=device-width,initial-scale=1"> 
+<title>Admin Dashboard — CobainTech</title> 
+<link rel="stylesheet" href="style.css"> 
+<style> 
+/* ---------------- Global ---------------- */ 
+body { margin:0; font-family:'Segoe UI',Roboto,sans-serif; background:#0b0c0e; color:#eee; } 
+a { color:inherit; text-decoration:none; } 
+h1,h2,h3,h4,h5,h6 { margin:0; } 
+button { cursor:pointer; } 
+ 
+/* ---------------- Header ---------------- */ 
+header { background:#111; padding:12px 24px; display:flex; justify-content:space-between; alignitems:center; box-shadow:0 2px 6px rgba(0,0,0,0.5);} 
+.brand { font-weight:bold; font-size:1.5rem; color:#fff; } 
+.header-actions button { background:#3498db; border:none; color:#fff; padding:8px 16px; borderradius:6px; transition:0.2s; } 
+.header-actions button:hover { background:#2980b9; } 
+ 
+/* ---------------- Layout ---------------- */ 
+.container { display:flex; height:calc(100vh - 60px); } 
+nav.sidebar { width:220px; background:#111; padding:16px; display:flex; flex-direction:column; boxshadow:2px 0 6px rgba(0,0,0,0.5); } 
+nav.sidebar button { background:none; border:none; color:#eee; text-align:left; padding:12px; marginbottom:8px; border-radius:6px; font-size:1rem; transition:0.2s; } 
+nav.sidebar button.active, nav.sidebar button:hover { background:#3498db; color:#fff; } 
+main.content { flex:1; padding:24px; overflow-y:auto; } 
+ 
+/* ---------------- Cards & Tables ---------------- */ 
+.card { background:#111; padding:16px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.5);
+margin-bottom:24px; } 
+table { width:100%; border-collapse:collapse; margin-top:12px; } 
+th, td { padding:12px; text-align:left; } 
+th { background:#222; font-weight:600; } 
+tr:nth-child(even) { background:#1a1a1a; } 
+tr:hover { background:#2c3e50; } 
+button.small { padding:6px 12px; border-radius:6px; font-size:.85rem; } 
+ 
+/* ---------------- Inputs ---------------- */ 
+input, select { background:#1a1a1a; color:#eee; border:1px solid #444; border-radius:6px; padding:6px
+10px; width:100%; margin-bottom:12px; } 
+label { display:block; margin-bottom:6px; font-weight:600; } 
+ 
+/* ---------------- Modals ---------------- */ 
+.modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7);
+justify-content:center; align-items:center; z-index:1000; } 
+.modal-inner { background:#111; padding:24px; border-radius:12px; max-width:600px; width:90%; boxshadow:0 6px 20px rgba(0,0,0,0.5); } 
+.modal-inner button.close { float:right; background:#e74c3c; color:#fff; border:none; padding:6px 12px;
+border-radius:6px; } 
+ 
+/* ---------------- Product Form ---------------- */ 
+#product-form-area { display:none; margin-bottom:24px; } 
+ 
+/* ---------------- Products Grid ---------------- */ 
+.product-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px;
+margin-top:16px; } 
+.product-card { background:#1a1a1a; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px
+rgba(0,0,0,0.5); display:flex; flex-direction:column; } 
+.product-card img { width:100%; height:150px; object-fit:cover; } 
+.product-card .product-info { padding:12px; flex:1; display:flex; flex-direction:column; } 
+.product-card h4 { margin-bottom:8px; font-size:1rem; } 
+.product-card p { font-size:.9rem; margin-bottom:4px; } 
+.product-card .actions { margin-top:auto; display:flex; gap:6px; } 
+ 
+/* ---------------- Sales ---------------- */ 
+.sales-metrics { display:flex; gap:16px; margin-bottom:24px; flex-wrap:wrap; } 
+.metric { flex:1; min-width:150px; background:#111; padding:16px; border-radius:12px; textalign:center; box-shadow:0 4px 12px rgba(0,0,0,0.5); } 
+.metric h3 { font-size:1.2rem; margin-bottom:8px; } 
+.metric p { font-size:1.5rem; font-weight:bold; color:#3498db; } 
+ 
+ /* Chat User List */ 
+#chat-users .chat-user { 
+ display:flex; 
+ justify-content:space-between; 
+ align-items:center; 
+ padding:12px; 
+ background:#111; 
+ border-radius:12px; 
+ cursor:pointer; 
+ transition:0.2s; 
+} 
+#chat-users .chat-user:hover { 
+ background:#3498db; 
+ color:#fff; 
+} 
+ 
+/* Chat Messages */ 
+.message { 
+ max-width:70%; 
+ padding:10px 14px; 
+ border-radius:12px; 
+ word-wrap:break-word; 
+ font-size:0.95rem; 
+} 
+.message.customer { 
+ background:#222; 
+ align-self:flex-start; 
+} 
+.message.admin { 
+ background:#3498db; 
+ color:#fff; 
+ align-self:flex-end; 
+} 
+.message span.name { 
+ font-weight:bold; 
+ display:block; 
+ margin-bottom:4px; 
+ font-size:0.85rem; 
+ color:#eee; 
+} 
+.message span.time { 
+ font-size:0.7rem; 
+ color:#999; 
+ display:block; 
+ margin-top:4px; 
+ text-align:right; 
+} 
+ 
+/* Upgraded chat styles */ 
+.user-btn { 
+ display:flex; 
+ align-items:center; 
+ gap:12px; 
+ padding:8px; 
+ border-radius:10px; 
+ background:#121314; 
+ color:#ddd; 
+ border:1px solid transparent; 
+ width:100%; 
+ text-align:left; 
+ cursor:pointer; 
+} 
+.user-btn:hover { background:#17202a; border-color:#22313a; } 
+.user-avatar { 
+ width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center; 
+ background:#2f80ed;color:#fff;font-weight:700;font-size:0.95rem;flex:0 0 44px; 
+} 
+.user-meta { flex:1; min-width:0; } 
+.user-name { font-weight:700; color:#fff; } 
+.user-sub { font-size:0.85rem;color:#9aa0a6; margin-top:2px; white-space:nowrap; overflow:hidden;
+text-overflow:ellipsis; } 
+.user-unread { background:#e74c3c;color:#fff;padding:4px 8px;border-radius:999px;fontsize:0.75rem;margin-left:8px; } 
+ 
+/* typing indicator small */ 
+.user-typing { font-size:0.85rem;color:#9aa0a6; margin-left:8px; } 
+ 
+/* chat bubbles */ 
+.bubble { padding:10px 14px;border-radius:14px;max-width:70%; word-break:break-word; } 
+.bubble.customer { background:#111; color:#eee; align-self:flex-start; border:1px solid #222; } 
+.bubble.admin { background:#2f80ed; color:#fff; align-self:flex-end; } 
+.msg-time { font-size:0.75rem;color:#9aa0a6;margin-top:6px; align-self:flex-end; } 
+ 
+/* Chat user row styles */ 
+.user-btn { 
+ display:flex; 
+ gap:10px; 
+ align-items:center; 
+ padding:10px; 
+ background:#111; 
+ border-radius:8px; 
+ border:1px solid #1b1b1b; 
+ color:#eee; 
+ cursor:pointer; 
+ text-align:left; 
+} 
+.user-btn:hover { background:#17202a; transform:translateY(-1px); } 
+.user-avatar { 
+ width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;fontweight:700;color:#fff;background:#3498db;flex-shrink:0; 
+} 
+.user-meta { display:flex; flex-direction:column; align-items:flex-start; min-width:0; } 
+.user-name { font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+max-width:170px; } 
+.user-last { font-size:0.85rem; color:#9b9b9b; white-space:nowrap; overflow:hidden; textoverflow:ellipsis; max-width:170px; } 
+.user-badge { margin-left:auto; background:#e74c3c; color:#fff; font-size:0.8rem; padding:4px 8px;
+border-radius:999px; } 
+.user-typing { font-size:0.8rem;color:#9b9b9b;margin-top:4px; } 
+.bubble-admin { align-self:flex-end; background:#3498db; color:#fff; padding:8px 12px; borderradius:12px; max-width:75%; } 
+.bubble-customer { align-self:flex-start; background:#1f2226; color:#fff; padding:8px 12px; borderradius:12px; max-width:75%; } 
+.msg-time { font-size:0.75rem; color:#9b9b9b; margin-top:4px; align-self:flex-end; } 
+ 
+ 
+</style> 
+</head> 
+<body> 
+ 
+<header> 
+ <div class="brand">CobainTech Admin</div> 
+ <div class="header-actions" style="display:flex;align-items:center;gap:10px;"> 
+ <span id="welcome-user-top" style="margin-right:10px;"></span> 
+ 
+ <!-- Store Button --> 
+ <button onclick="window.open('index.html','_blank')" class="btn-store"> 
+ 🏬 Store 
+ </button> 
+ 
+ <!-- Logout Button --> 
+ <button onclick="logoutUser()" class="btn-logout"> 
+ 🔒 Logout 
+ </button> 
+ </div> 
+</header> 
+ 
+<style> 
+.btn-store, .btn-logout { 
+ background: #3498db; 
+ border: none; 
+ color: #fff; 
+ padding: 8px 16px; 
+ border-radius: 6px; 
+ font-weight: 500; 
+ transition: background 0.2s; 
+} 
+.btn-store:hover { background: #2980b9; } 
+.btn-logout { 
+ background: #e74c3c; 
+} 
+.btn-logout:hover { 
+ background: #c0392b; 
+} 
+</style> 
+ 
+<script> 
+// Wait until Firebase is fully loaded 
+window.addEventListener('load', () => { 
+ // Redefine logout function after Firebase initializes 
+ window.logoutUser = function() { 
+ if (firebase && firebase.auth) { 
+ firebase.auth().signOut() 
+ .then(() => { 
+ console.log('User signed out successfully.'); 
+ window.location.href = "index.html"; // redirect to store main page 
+ }) 
+ .catch((error) => { 
+ console.error("Logout failed:", error); 
+ alert("Logout failed. Check console for details."); 
+ }); 
+ } else { 
+ console.error("Firebase not loaded yet."); 
+ alert("Please wait a few seconds and try again."); 
+ } 
+ }; 
+}); 
+</script> 
+ 
+ 
+<div class="container"> 
+ <nav class="sidebar"> 
+ <button class="active" onclick="showTab('products')">Products</button> 
+ <button onclick="showTab('orders')">Orders</button> 
+ <button onclick="showTab('sales')">Sales</button> 
+ <button onclick="showTab('settings')">Settings</button> 
+ <button onclick="showTab('chat')">Chat</button> 
+ </nav> 
+ 
+ <main class="content"> 
+ <!-- Products Tab --> 
+ <section id="tab-products"> 
+ <div class="card"> 
+ <button onclick="showAddProduct()" class="btn primary">Add Product</button> 
+ <div id="product-form-area"> 
+ <h3 id="product-form-title">Add Product</h3> 
+ <form id="product-form" onsubmit="saveProduct(event)"> 
+ <input type="hidden" id="p-id"> 
+ <label>Title <input id="p-title" required></label> 
+ <label>Price <input type="number" id="p-price" required></label> 
+ <label>Stock <input type="number" id="p-stock" required></label> 
+ <label>Category <input id="p-category" required></label> 
+ <label>Description <input id="p-desc"></label> 
+ <label>Image URL <input id="p-image-url" placeholder="https://example.com/image.jpg">
+</label> 
+ <div style="display:flex;gap:8px;"> 
+ <button type="submit" class="btn primary">Save</button> 
+ <button type="button" class="btn ghost" onclick="hideProductForm()">Cancel</button> 
+ </div> 
+ </form> 
+ </div> 
+ </div> 
+ <input id="admin-search" placeholder="Search products..." oninput="renderAdminProducts()"> 
+ <div id="admin-product-list" class="product-grid"></div> 
+ </section> 
+ 
+<!-- ---------------- Admin Chat (UPGRADED) ---------------- --> 
+<section id="tab-chat" style="display:none;"> 
+ <div class="card" style="padding:14px; display:flex; flex-direction:column; height:600px;"> 
+ <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; marginbottom:12px;"> 
+ <h3 style="margin:0">Customer Messages</h3> 
+ <div style="display:flex; gap:8px; align-items:center;"> 
+ <input id="chat-search" placeholder="Search customers..." style="padding:8px 10px; borderradius:8px; border:1px solid #333; background:#0b0c0e; color:#eee;" /> 
+ <button onclick="showTab('products')" class="btn small">Back</button> 
+ </div> 
+ </div> 
+ 
+ <div style="display:flex; gap:12px; flex:1; min-height:0; overflow:hidden;"> 
+ <!-- left: users --> 
+ <div id="chat-users" style="width:300px; background:#0f1113; border-radius:12px; padding:8px;
+overflow:auto; display:flex; flex-direction:column; gap:8px;"> 
+ <!-- user rows are injected here --> 
+ <div style="padding:12px;color:#999">Loading users…</div> 
+ </div> 
+ 
+ <!-- right: chat panel --> 
+ <div style="flex:1; display:flex; flex-direction:column; min-width:0; gap:10px;"> 
+ <div id="chat-panel-header" style="background:#0f1113; padding:12px; border-radius:8px;
+display:flex; align-items:center; justify-content:space-between;"> 
+ <div style="display:flex;gap:12px;align-items:center;"> 
+ <div id="chat-avatar" style="width:48px;height:48px;borderradius:50%;background:#3498db;color:#fff;display:flex;align-items:center;justify-content:center;fontweight:700;font-size:1rem;">U</div> 
+ <div> 
+ <div id="chat-with" style="font-weight:700;color:#fff">Select a customer</div> 
+ <div id="chat-last-seen" style="font-size:0.8rem;color:#9b9b9b">—</div> 
+ </div> 
+ </div> 
+ 
+ <div style="display:flex;gap:8px;align-items:center;"> 
+ <button id="btn-call" class="btn small" onclick="startCallToSelectedUser()">📞 Call</button> 
+ <button id="btn-hangup" class="btn small"
+style="display:none;background:#e74c3c;color:#fff" onclick="hangupCall()">Hang up</button> 
+ </div> 
+ </div> 
+ 
+ <div id="chat-admin-messages" style="flex:1; background:#070708; border-radius:8px;
+padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px;"> 
+ <div style="color:#9b9b9b">Open a chat to view messages.</div> 
+ </div> 
+ 
+ <div id="chat-typing" style="min-height:18px;color:#9b9b9b;font-size:0.9rem"></div> 
+ 
+ <div style="display:flex; gap:8px;"> 
+ <input id="admin-chat-input" placeholder="Type a message..." style="flex:1; padding:10px
+12px; border-radius:20px; border:1px solid #333; background:#0b0c0e; color:#eee;"> 
+ <button class="btn primary" onclick="adminSendChat()">Send</button> 
+ </div> 
+ 
+ <div style="display:flex; gap:8px; margin-top:6px;"> 
+ <button class="btn ghost" onclick="insertQuickReply('Hello! How can I help you
+today?')">Quick: Hello</button> 
+ <button class="btn ghost" onclick="insertQuickReply('Your order is being processed. I will
+update you soon.')">Quick: Order update</button> 
+ <button class="btn ghost" onclick="insertQuickReply('Can you share a photo of the
+issue?')">Quick: Ask photo</button> 
+ </div> 
+ </div> 
+ </div> 
+ </div> 
+</section> 
+ 
+ 
+ 
+ 
+ <!-- Orders Tab --> 
+ <section id="tab-orders" style="display:none"> 
+ <div class="card"> 
+ <h3>Orders</h3> 
+ <table> 
+ <thead> 
+ <tr> 
+ <th>Order ID</th> 
+ <th>Customer</th> 
+ <th>Items</th> 
+ <th>Total</th> 
+ <th>Status</th> 
+ <th>Actions</th> 
+ </tr> 
+ </thead> 
+ <tbody id="admin-orders"></tbody> 
+ </table> 
+ </div> 
+ </section> 
+ 
+ <!-- Sales Tab --> 
+ <section id="tab-sales" style="display:none"> 
+ <div class="card"> 
+ <h3>Sales Overview</h3> 
+ <div class="sales-metrics"> 
+ <div class="metric"> 
+ <h3>Total Revenue</h3> 
+ <p id="total-revenue">₱0</p> 
+ </div> 
+ <div class="metric"> 
+ <h3>Total Orders</h3> 
+ <p id="total-orders">0</p> 
+ </div> 
+ </div> 
+ <canvas id="salesChart" height="250"></canvas> 
+ </div> 
+ </section> 
+<!-- Settings Tab --> 
+<section id="tab-settings" style="display:none"> 
+ <div class="card"> 
+ <h3>Store Settings</h3> 
+ <form id="settings-form" onsubmit="saveSettings(event)"> 
+ <label>Store Name 
+ <input id="store-name" placeholder="CobainTech"> 
+ </label> 
+ <label>Store Logo URL 
+ <input id="store-logo" placeholder="https://example.com/logo.png"> 
+ </label> 
+ <label>Contact Email 
+ <input id="store-email" placeholder="support@cobaintech.com"> 
+ </label> 
+ <label>Contact Phone 
+ <input id="store-phone" placeholder="+63 900 000 0000"> 
+ </label> 
+ <button type="submit" class="btn primary">Save Settings</button> 
+ </form> 
+ </div> 
+</section> 
+ </main> 
+</div> 
+ 
+<!-- Chart.js --> 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
+ 
+<!-- Firebase SDKs --> 
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script> 
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script> 
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script> 
+<script src="firebase-config.js"></script> 
+<script src="script.js"></script> 
+ 
+<script> 
+function showTab(tab){ 
+ ['products','orders','sales','settings','chat'].forEach(t=>{ 
+ document.getElementById('tab-'+t).style.display=(t===tab)?'block':'none'; 
+ document.querySelectorAll('.sidebar button').forEach(btn=>{ 
+ if(btn.textContent.toLowerCase()===t) btn.classList.toggle('active', t===tab); 
+ }); 
+ }); 
+} 
+ 
+// Products rendering with Firestore imgUrl 
+function renderAdminProducts(){ 
+ const container = document.getElementById('admin-product-list'); 
+ db.collection('products').orderBy('createdAt','desc').get().then(snapshot=>{ 
+ const products=[]; 
+ snapshot.forEach(doc=>{ 
+ const p = doc.data(); 
+ p.id = doc.id; 
+ const searchValue = (document.getElementById('admin-search').value||'').toLowerCase(); 
+ if(!searchValue || p.title.toLowerCase().includes(searchValue) ||
+(p.category||'').toLowerCase().includes(searchValue)){ 
+ products.push(p); 
+ } 
+ }); 
+ 
+ container.innerHTML = products.map(p=> 
+ <div class="product-card"> 
+ <img src="${p.imgUrl||'https://via.placeholder.com/150'}" alt="${p.title}"> 
+ <div class="product-info"> 
+ <h4>${p.title}</h4> 
+ <p>₱${p.price.toLocaleString()}</p> 
+ <p>Stock: ${p.stock||0}</p> 
+ <p>Category: ${p.category||''}</p> 
+ <div class="actions"> 
+ <button class="btn small primary" onclick="editProduct('${p.id}')">Edit</button> 
+ <button class="btn small ghost" onclick="deleteProduct('${p.id}')">Delete</button> 
+ </div> 
+ </div> 
+ </div> 
+ ).join(''); 
+ }); 
+} 
+ 
+// Sales chart 
+let salesChart; 
+function renderSalesChart(){ 
+ const ctx = document.getElementById('salesChart').getContext('2d'); 
+ db.collection('orders').orderBy('createdAt').get().then(snapshot=>{ 
+ const labels = [], data = []; 
+ snapshot.forEach(doc=>{ 
+ const o = doc.data(); 
+ const date = o.createdAt?.toDate().toLocaleDateString() || ''; 
+ labels.push(date); 
+ data.push(o.total||0); 
+ }); 
+ if(salesChart) salesChart.destroy(); 
+ salesChart = new Chart(ctx,{ 
+ type:'line', 
+ data:{labels, datasets:[{label:'Order Total', data, borderColor:'#3498db',
+backgroundColor:'rgba(52,152,219,0.2)'}]}, 
+ options:{responsive:true, plugins:{legend:{display:false}}} 
+ }); 
+ }); 
+} 
+ 
+// Load admin dashboard 
+window.addEventListener('load', () => { 
+ bindAuthState(); 
+ initAdmin(); 
+ initAdminOrders(); 
+ renderAdminProducts(); 
+ renderSalesChart(); 
+ 
+ console.log("✅ Admin page loaded. Initializing chat listener..."); 
+ initChat(); // <-- REQUIRED 
+}); 
+ 
+ 
+ 
+ // Sales metrics 
+ ordersRef().onSnapshot(snapshot=>{ 
+ let totalRevenue=0; 
+ snapshot.forEach(doc=>{ totalRevenue+=doc.data().total||0; }); 
+ document.getElementById('total-revenue').textContent='₱'+totalRevenue.toLocaleString(); 
+ document.getElementById('total-orders').textContent=snapshot.size; 
+ }); 
+ 
+</script> 
+<script> 
+// ---------- SETTINGS ---------- 
+function loadSettings() { 
+ db.collection('settings').doc('store').get().then(doc => { 
+ if (doc.exists) { 
+ const s = doc.data(); 
+ document.getElementById('store-name').value = s.name || ''; 
+ document.getElementById('store-logo').value = s.logo || ''; 
+ document.getElementById('store-email').value = s.email || ''; 
+ document.getElementById('store-phone').value = s.phone || ''; 
+ } 
+ }).catch(err => console.error('Error loading settings:', err)); 
+} 
+ 
+function saveSettings(e) { 
+ e.preventDefault(); 
+ const name = document.getElementById('store-name').value; 
+ const logo = document.getElementById('store-logo').value; 
+ const email = document.getElementById('store-email').value; 
+ const phone = document.getElementById('store-phone').value; 
+ 
+ db.collection('settings').doc('store').set({ 
+ name, logo, email, phone, updatedAt: new Date() 
+ }).then(() => { 
+ alert('Settings saved successfully!'); 
+ }).catch(err => { 
+ console.error('Error saving settings:', err); 
+ alert('Failed to save settings.'); 
+ }); 
+} 
+ 
+// Auto-load when Settings tab is opened 
+function showTab(tab){ 
+ ['products','orders','sales','settings','chat'].forEach(t=>{ 
+ document.getElementById('tab-'+t).style.display = (t === tab) ? 'block' : 'none'; 
+ 
+ document.querySelectorAll('.sidebar button').forEach(btn=>{ 
+ if (btn.textContent.toLowerCase() === t) 
+ btn.classList.toggle('active', t === tab); 
+ }); 
+ }); 
+ 
+ // Load settings only when tab is opened 
+ if (tab === 'settings') loadSettings(); 
+} 
+ 
+</script> 
+</body> 
+</html> 
+ 
