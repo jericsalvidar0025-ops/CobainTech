@@ -738,42 +738,12 @@ function showTab(tab){
  // Load settings only when tab is opened 
  if (tab === 'settings') loadSettings(); 
 } 
- <!-- Hidden audio element for remote stream -->
-<audio id="remote-audio" autoplay style="display:none;"></audio>
-
-<!-- Optional: indicate call status -->
-<div id="call-status" style="position:fixed; bottom:20px; right:20px; background:#141621; color:#fff; padding:10px 14px; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.5); font-weight:600; display:none;">
-  Calling...
-</div>
-
-<script>
-  // Show call status when call is active
-  const btnCall = document.getElementById('btn-call');
-  const btnHangup = document.getElementById('btn-hangup');
-  const callStatus = document.getElementById('call-status');
-
-  btnCall.addEventListener('click', () => {
-    callStatus.textContent = 'Calling...';
-    callStatus.style.display = 'block';
-  });
-
-  btnHangup.addEventListener('click', () => {
-    callStatus.style.display = 'none';
-  });
-
-  // Automatically show remote audio once stream is received
-  const remoteAudio = document.getElementById('remote-audio');
-  const observer = new MutationObserver(() => {
-    if (remoteAudio.srcObject) remoteAudio.style.display = 'block';
-    else remoteAudio.style.display = 'none';
-  });
-  observer.observe(remoteAudio, { attributes: true, attributeFilter: ['srcObject'] });
-</script>
 
 </script> 
 </body> 
 </html> 
  
+
 
 
 
