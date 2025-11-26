@@ -65,6 +65,15 @@ Notes:
 */
 
 // initChat: sets up listeners for customer (store) and admin (dashboard)
+// Customer → Admin call trigger
+function startCallToAdmin() {
+  const user = firebase.auth().currentUser;
+  if (!user) return alert("Please login first to call CobainTech Support.");
+
+  // Call the admin UID
+  startCall("JIDFGUZI2qTo8nexGBjiOWM4sIy1");
+}
+
 function initChat(){
   auth.onAuthStateChanged(user => {
     // Store (customer) view
@@ -1178,4 +1187,5 @@ async function advanceOrder(id){
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
 
 /* ---------- End of script.js ---------- */
+
 
