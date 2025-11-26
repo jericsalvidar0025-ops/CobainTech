@@ -50,22 +50,7 @@ let remoteStream = null;
 let pc = null;
 let currentCallId = null;
 
-/* ---------------------- Chat (upgraded: names, unread, typing, notifications) ---------------------- */
 
-/*
-Data model:
-- chats (collection)
-  - {userId} (doc) { userId, name, updatedAt, unreadForAdmin: bool, typing: bool }
-    - messages (subcollection)
-      - {auto-id} { sender: 'customer'|'admin', message: string, timestamp: Timestamp, readByAdmin: bool, readByCustomer: bool }
-
-Notes:
-- Uses compat SDK (firebase.auth(), firebase.firestore()) as in your project.
-- Make sure 'users' collection contains username fields (optional) for fallback.
-*/
-
-// initChat: sets up listeners for customer (store) and admin (dashboard)
-// Customer → Admin call trigger
 function startCallToAdmin() {
   const user = firebase.auth().currentUser;
   if (!user) return alert("Please login first to call CobainTech Support.");
@@ -517,15 +502,6 @@ function notifyAdminOfIncomingMessage(userId, name, message){
   } catch (err) { /* ignore */ }
 }
 
-/* ------------------- CALL SYSTEM (WebRTC with Firestore signaling) ------------------- */
-/*
-Basic flow:
-- A caller (customer or admin) creates a call document in 'calls' collection with callerId and calleeId and state:'requested'
-- Caller creates offer SDP and writes to call doc; also writes ICE candidates to offerCandidates subcollection
-- Callee (acceptor) responds by creating answer and writing to call doc; answerCandidates subcollection used similarly
-- Both peers exchange ICE candidates and connect
-Note: This is demo-level. Use TURN servers for reliability.
-*/
 
 async function prepareLocalMedia(){
   if (localStream) return;
@@ -708,6 +684,116 @@ async function hangupCall(){
     const localEl = document.getElementById('local-video'); if (localEl) localEl.srcObject = null;
     const remoteEl = document.getElementById('remote-video'); if (remoteEl) remoteEl.srcObject = null;
   } catch (e) { console.warn('hangup error', e); }
+}
+    if (data.answer && !pc.currentRemoteDescription) {
+      const answer = new RTCSessionDescription(data.answer);
+      await pc.setRemoteDescription(answer);
+    }
+
+    // call ended
+    if (data.state === 'ended') {
+      endCall();
+    }
+  });
+
+  // listen for ICE candidates from admin/answerer
+  callRef.collection('answerCandidates').onSnapshot(snap => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'added') {
+        const candidate = new RTCIceCandidate(change.doc.data());
+        pc.addIceCandidate(candidate).catch(()=>{});
+      }
+    });
+  });
+
+  showCallUI();
+}
+
+// Admin receiving incoming call
+function listenForCallRequests(){
+  const admin = firebase.auth().currentUser;
+  if (!admin) return;
+
+  db.collection('calls')
+    .where('calleeId', '==', admin.uid)
+    .where('state', '==', 'requested')
+    .onSnapshot(snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const callId = change.doc.id;
+        incomingCallUI(callId, change.doc.data());
+      });
+    });
+}
+
+// Admin accepts call
+async function acceptCall(callId){
+  const callRef = db.collection('calls').doc(callId);
+  currentCallId = callId;
+
+  await prepareLocalMedia();
+  await createPeerConnection(callRef);
+
+  const callData = (await callRef.get()).data();
+  await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  await callRef.set({
+    answer: { type: answer.type, sdp: answer.sdp },
+    state: 'active',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  // listen for caller ICE
+  callRef.collection('offerCandidates').onSnapshot(snap => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'added') {
+        pc.addIceCandidate(new RTCIceCandidate(change.doc.data())).catch(()=>{});
+      }
+    });
+  });
+
+  showCallUI();
+}
+
+// End call (both sides)
+async function endCall(){
+  if (pc) {
+    pc.getSenders().forEach(s => s.track && s.track.stop());
+    pc.close();
+  }
+
+  pc = null;
+  localStream = null;
+  remoteStream = null;
+
+  hideCallUI();
+
+  if (currentCallId) {
+    await db.collection('calls').doc(currentCallId).set({
+      state: 'ended',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    currentCallId = null;
+  }
+}
+
+// UI helpers
+function showCallUI(){
+  const modal = document.getElementById('call-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function hideCallUI(){
+  const modal = document.getElementById('call-modal');
+  if (modal) modal.style.display = 'none';
+
+  const r = document.getElementById('remote-video');
+  const l = document.getElementById('local-video');
+  if (r) r.srcObject = null;
+  if (l) l.srcObject = null;
 }
 
 /* ---------------------- Legacy chat helper (toggleChatBox) ---------------------- */
@@ -1187,6 +1273,7 @@ async function advanceOrder(id){
 function setFooterYear(){ const f=q('footer'); if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
