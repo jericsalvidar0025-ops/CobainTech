@@ -405,6 +405,21 @@ input:focus, select:focus {
 .btn-logout:hover { 
  background: #c0392b; 
 } 
+
+.incoming-call {
+  position: fixed;
+  bottom: 50%;
+  right: 50%;
+  transform: translate(50%, 50%);
+  background: #111;
+  padding: 20px;
+  border-radius: 12px;
+  color: #fff;
+  text-align: center;
+  z-index: 99999;
+  box-shadow: 0 6px 20px rgba(0,0,0,.5);
+}
+
 </style> 
  
 <script> 
@@ -485,7 +500,14 @@ overflow:auto; display:flex; flex-direction:column; gap:8px;">
  <!-- user rows are injected here --> 
  <div style="padding:12px;color:#999">Loading users…</div> 
  </div> 
- 
+
+
+ <div id="incoming-call-box" class="incoming-call" style="display:none">
+  <p>📞 Customer is calling...</p>
+  <button onclick="answerCall()">Answer</button>
+  <button onclick="declineCall()">Decline</button>
+</div>
+
  <!-- right: chat panel --> 
  <div style="flex:1; display:flex; flex-direction:column; min-width:0; gap:10px;"> 
  <div id="chat-panel-header" style="background:#0f1113; padding:12px; border-radius:8px;
@@ -743,6 +765,7 @@ function showTab(tab){
 </body> 
 </html> 
  
+
 
 
 
