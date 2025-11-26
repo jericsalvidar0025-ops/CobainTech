@@ -35,7 +35,7 @@
         <a id="signup-link" href="signup.html" class="btn small">Sign Up</a>
         <a id="admin-link" href="admin.html" class="btn small ghost" style="display:none">Admin</a>
         <button id="cart-btn" class="cart-btn" aria-label="Open cart">🛍️ <span id="cart-count">0</span></button>
-        <button id="call-store-btn" class="btn primary">📞 Call Store</button>
+       <button id="call-store-btn" class="call-btn" onclick="startCallToAdmin()">📞 Call Store</button>
       </nav>
     </div>
   </header>
@@ -45,16 +45,13 @@
       <!-- Products from Firestore will be injected here -->
     </section>
   </main>
-<!-- Call Panel -->
-<div id="call-panel" class="call-panel" style="display:none;">
-  <div class="call-header">
-    <span id="call-status">Calling Store...</span>
-    <button onclick="hangUpCall()" class="call-end">✕</button>
-  </div>
-  <div class="call-body">
-    <audio id="remote-audio" autoplay></audio>
-  </div>
+  
+<div id="incoming-call-box" class="incoming-call" style="display:none">
+  <p>📞 CobainTech is calling...</p>
+  <button onclick="answerCall()">Answer</button>
+  <button onclick="declineCall()">Decline</button>
 </div>
+
   <!-- Cart panel -->
   <aside id="cart-panel" class="cart-panel" aria-hidden="true">
     <div class="cart-head">
@@ -297,6 +294,7 @@
   <script src="script.js"></script>
 </body>
 </html>
+
 
 
 
