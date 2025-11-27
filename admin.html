@@ -331,29 +331,294 @@ input:focus, select:focus {
 }
 
 /* ---------------- Chat Panel ---------------- */
-#chat-users { width: 280px; background: #1a1c2b; border-radius: 12px; padding: 10px; overflow-y:auto; display:flex; flex-direction:column; gap: 10px; border-right:1px solid #2c2f3a; }
-.user-btn { display:flex; gap:12px; align-items:center; padding:12px; background:#141621; border-radius:12px; border:1px solid #2c2f3a; color:#eee; cursor:pointer; transition:all 0.2s; }
-.user-btn:hover { background:#2c3e50; border-color:#3498db; transform:translateY(-1px); }
-.user-avatar { width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.95rem;color:#fff;background:linear-gradient(145deg,#3498db,#2980b9);flex-shrink:0; }
-.user-meta { display:flex; flex-direction:column; min-width:0; overflow:hidden; }
-.user-name { font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px; }
-.user-last { font-size:0.85rem;color:#9b9b9b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; max-width:170px; }
-.user-badge { margin-left:auto;background:#e74c3c;color:#fff;font-size:0.75rem;padding:4px 8px;border-radius:999px; }
-.user-typing { font-size:0.8rem;color:#9b9b9b;margin-top:4px; }
-#chat-admin-messages { flex:1; background:#11131c;border-radius:12px;padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:10px; scrollbar-width:thin; scrollbar-color:#3498db #1a1c2b; }
-.bubble-admin,.bubble-customer { padding:10px 16px;border-radius:18px;max-width:75%; word-break:break-word; font-size:0.95rem; position:relative; transition:all 0.2s; }
-.bubble-admin { background:linear-gradient(145deg,#3498db,#2980b9); color:#fff; align-self:flex-end; box-shadow:0 2px 8px rgba(52,152,219,0.4); }
-.bubble-customer { background:#1f222f; color:#eee; align-self:flex-start; border:1px solid #2c2f3a; }
-.msg-time { font-size:0.75rem;color:#9aa0a6;margin-top:4px;text-align:right; }
-#admin-chat-input { flex:1;padding:12px 16px;border-radius:24px;border:1px solid #2c2f3a;background:#141621;color:#eee;font-size:0.95rem;outline:none; transition:border 0.2s, background 0.2s; }
-#admin-chat-input:focus { border-color:#3498db; background:#1a1c2b; }
-.btn.primary { background:linear-gradient(145deg,#3498db,#2980b9); color:#fff; border-radius:24px; padding:10px 18px; font-weight:600; font-size:0.95rem; transition:all 0.2s; }
-.btn.primary:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(52,152,219,0.4); }
-.btn.ghost { background:#1a1c2b; border:1px solid #2c2f3a; color:#eee; font-weight:500; border-radius:12px; padding:6px 14px; font-size:0.85rem; transition:all 0.2s; }
-.btn.ghost:hover { background:#3498db; color:#fff; border-color:#3498db; transform:translateY(-1px); }
-#chat-panel-header { background:#141621; padding:14px; border-radius:12px; display:flex; align-items:center; justify-content:space-between; border:1px solid #2c2f3a; }
-#chat-panel-header div { display:flex; align-items:center; gap:12px; }
-#chat-avatar { width:48px;height:48px;border-radius:50%;background:linear-gradient(145deg,#3498db,#2980b9);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.1rem; }
+#chat-users { 
+    width: 280px; 
+    background: #1a1c2b; 
+    border-radius: 12px; 
+    padding: 10px; 
+    overflow-y:auto; 
+    display:flex; 
+    flex-direction:column; 
+    gap: 10px; 
+    border-right:1px solid #2c2f3a; 
+}
+
+.user-btn { 
+    display:flex; 
+    gap:12px; 
+    align-items:center; 
+    padding:12px; 
+    background:#141621; 
+    border-radius:12px; 
+    border:1px solid #2c2f3a; 
+    color:#eee; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+}
+
+.user-btn:hover { 
+    background:#2c3e50; 
+    border-color:#3498db; 
+    transform:translateY(-1px); 
+}
+
+.user-avatar { 
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:700;
+    font-size:0.95rem;
+    color:#fff;
+    background:linear-gradient(145deg,#3498db,#2980b9);
+    flex-shrink:0; 
+}
+
+.user-meta { 
+    display:flex; 
+    flex-direction:column; 
+    min-width:0; 
+    overflow:hidden; 
+}
+
+.user-name { 
+    font-weight:700;
+    color:#fff;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width:170px; 
+}
+
+.user-last { 
+    font-size:0.85rem;
+    color:#9b9b9b;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis; 
+    max-width:170px; 
+}
+
+.user-badge { 
+    margin-left:auto;
+    background:#e74c3c;
+    color:#fff;
+    font-size:0.75rem;
+    padding:4px 8px;
+    border-radius:999px; 
+}
+
+.user-typing { 
+    font-size:0.8rem;
+    color:#9b9b9b;
+    margin-top:4px; 
+}
+
+#chat-admin-messages { 
+    flex:1; 
+    background:#11131c;
+    border-radius:12px;
+    padding:16px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:10px; 
+    scrollbar-width:thin; 
+    scrollbar-color:#3498db #1a1c2b; 
+}
+
+.bubble-admin, .bubble-customer { 
+    padding:10px 16px;
+    border-radius:18px;
+    max-width:75%; 
+    word-break:break-word; 
+    font-size:0.95rem; 
+    position:relative; 
+    transition:all 0.2s; 
+}
+
+.bubble-admin { 
+    background:linear-gradient(145deg,#3498db,#2980b9); 
+    color:#fff; 
+    align-self:flex-end; 
+    box-shadow:0 2px 8px rgba(52,152,219,0.4); 
+}
+
+.bubble-customer { 
+    background:#1f222f; 
+    color:#eee; 
+    align-self:flex-start; 
+    border:1px solid #2c2f3a; 
+}
+
+.msg-time { 
+    font-size:0.75rem;
+    color:#9aa0a6;
+    margin-top:4px;
+    text-align:right; 
+}
+
+#admin-chat-input { 
+    flex:1;
+    padding:12px 16px;
+    border-radius:24px;
+    border:1px solid #2c2f3a;
+    background:#141621;
+    color:#eee;
+    font-size:0.95rem;
+    outline:none; 
+    transition:border 0.2s, background 0.2s; 
+}
+
+#admin-chat-input:focus { 
+    border-color:#3498db; 
+    background:#1a1c2b; 
+}
+
+.btn.primary { 
+    background:linear-gradient(145deg,#3498db,#2980b9); 
+    color:#fff; 
+    border-radius:24px; 
+    padding:10px 18px; 
+    font-weight:600; 
+    font-size:0.95rem; 
+    transition:all 0.2s; 
+}
+
+.btn.primary:hover { 
+    transform:translateY(-2px); 
+    box-shadow:0 4px 12px rgba(52,152,219,0.4); 
+}
+
+.btn.ghost { 
+    background:#1a1c2b; 
+    border:1px solid #2c2f3a; 
+    color:#eee; 
+    font-weight:500; 
+    border-radius:12px; 
+    padding:6px 14px; 
+    font-size:0.85rem; 
+    transition:all 0.2s; 
+}
+
+.btn.ghost:hover { 
+    background:#3498db; 
+    color:#fff; 
+    border-color:#3498db; 
+    transform:translateY(-1px); 
+}
+
+#chat-panel-header { 
+    background:#141621; 
+    padding:14px; 
+    border-radius:12px; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+    border:1px solid #2c2f3a; 
+}
+
+#chat-panel-header div { 
+    display:flex; 
+    align-items:center; 
+    gap:12px; 
+}
+
+#chat-avatar { 
+    width:48px;
+    height:48px;
+    border-radius:50%;
+    background:linear-gradient(145deg,#3498db,#2980b9);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:700;
+    font-size:1.1rem; 
+}
+
+/* ---------------- Incoming Call Styling ---------------- */
+.incoming-call {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #1a1c2b;
+    padding: 30px;
+    border-radius: 16px;
+    color: #fff;
+    text-align: center;
+    z-index: 99999;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+    border: 2px solid #3498db;
+    min-width: 300px;
+}
+
+.incoming-call p {
+    font-size: 1.2rem;
+    margin-bottom: 20px;
+    color: #3498db;
+    font-weight: 600;
+}
+
+.incoming-call button {
+    margin: 0 10px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.incoming-call .btn.primary {
+    background: linear-gradient(145deg, #3498db, #2980b9);
+    color: white;
+}
+
+.incoming-call .btn.ghost {
+    background: #2c3e50;
+    color: white;
+    border: 1px solid #34495e;
+}
+
+/* ---------------- Call Modal ---------------- */
+#call-modal {
+    background: rgba(0,0,0,0.85);
+}
+
+#call-modal .modal-inner {
+    max-width: 900px;
+    background: #141621;
+}
+
+.call-video-container {
+    display: flex;
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.call-video-box {
+    flex: 1;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.call-video-box h4 {
+    padding: 10px;
+    margin: 0;
+    background: #1c1e2a;
+    color: #fff;
+    text-align: center;
+}
+
+.call-video-box video {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+}
 
 /* ---------------- Scrollbars ---------------- */
 ::-webkit-scrollbar { width:8px; }
@@ -364,10 +629,15 @@ input:focus, select:focus {
 @media (max-width:1024px){
     nav.sidebar { width:200px; }
     .product-grid { grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); }
+    .call-video-container { flex-direction: column; }
+}
+
+@media (max-width:768px){
+    .container { flex-direction: column; }
+    nav.sidebar { width: 100%; flex-direction: row; overflow-x: auto; }
+    nav.sidebar button { white-space: nowrap; }
 }
 </style>
-
-
 </head> 
 <body> 
  
@@ -388,64 +658,6 @@ input:focus, select:focus {
  </div> 
 </header> 
  
-<style> 
-.btn-store, .btn-logout { 
- background: #3498db; 
- border: none; 
- color: #fff; 
- padding: 8px 16px; 
- border-radius: 6px; 
- font-weight: 500; 
- transition: background 0.2s; 
-} 
-.btn-store:hover { background: #2980b9; } 
-.btn-logout { 
- background: #e74c3c; 
-} 
-.btn-logout:hover { 
- background: #c0392b; 
-} 
-
-.incoming-call {
-  position: fixed;
-  bottom: 50%;
-  right: 50%;
-  transform: translate(50%, 50%);
-  background: #111;
-  padding: 20px;
-  border-radius: 12px;
-  color: #fff;
-  text-align: center;
-  z-index: 99999;
-  box-shadow: 0 6px 20px rgba(0,0,0,.5);
-}
-
-</style> 
- 
-<script> 
-// Wait until Firebase is fully loaded 
-window.addEventListener('load', () => { 
- // Redefine logout function after Firebase initializes 
- window.logoutUser = function() { 
- if (firebase && firebase.auth) { 
- firebase.auth().signOut() 
- .then(() => { 
- console.log('User signed out successfully.'); 
- window.location.href = "index.html"; // redirect to store main page 
- }) 
- .catch((error) => { 
- console.error("Logout failed:", error); 
- alert("Logout failed. Check console for details."); 
- }); 
- } else { 
- console.error("Firebase not loaded yet."); 
- alert("Please wait a few seconds and try again."); 
- } 
- }; 
-}); 
-</script> 
- 
- 
 <div class="container"> 
  <nav class="sidebar"> 
  <button class="active" onclick="showTab('products')">Products</button> 
@@ -460,7 +672,7 @@ window.addEventListener('load', () => {
  <section id="tab-products"> 
  <div class="card"> 
  <button onclick="showAddProduct()" class="btn primary">Add Product</button> 
- <div id="product-form-area"> 
+ <div id="product-form-area" style="display:none;"> 
  <h3 id="product-form-title">Add Product</h3> 
  <form id="product-form" onsubmit="saveProduct(event)"> 
  <input type="hidden" id="p-id"> 
@@ -469,8 +681,7 @@ window.addEventListener('load', () => {
  <label>Stock <input type="number" id="p-stock" required></label> 
  <label>Category <input id="p-category" required></label> 
  <label>Description <input id="p-desc"></label> 
- <label>Image URL <input id="p-image-url" placeholder="https://example.com/image.jpg">
-</label> 
+ <label>Image URL <input id="p-image-url" placeholder="https://example.com/image.jpg"></label> 
  <div style="display:flex;gap:8px;"> 
  <button type="submit" class="btn primary">Save</button> 
  <button type="button" class="btn ghost" onclick="hideProductForm()">Cancel</button> 
@@ -482,79 +693,59 @@ window.addEventListener('load', () => {
  <div id="admin-product-list" class="product-grid"></div> 
  </section> 
  
-<!-- ---------------- Admin Chat (UPGRADED) ---------------- --> 
-<section id="tab-chat" style="display:none;"> 
+ <!-- Chat Tab --> 
+ <section id="tab-chat" style="display:none;"> 
  <div class="card" style="padding:14px; display:flex; flex-direction:column; height:600px;"> 
- <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; marginbottom:12px;"> 
+ <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;"> 
  <h3 style="margin:0">Customer Messages</h3> 
  <div style="display:flex; gap:8px; align-items:center;"> 
- <input id="chat-search" placeholder="Search customers..." style="padding:8px 10px; borderradius:8px; border:1px solid #333; background:#0b0c0e; color:#eee;" /> 
+ <input id="chat-search" placeholder="Search customers..." style="padding:8px 10px; border-radius:8px; border:1px solid #333; background:#0b0c0e; color:#eee;" /> 
  <button onclick="showTab('products')" class="btn small">Back</button> 
  </div> 
  </div> 
  
  <div style="display:flex; gap:12px; flex:1; min-height:0; overflow:hidden;"> 
- <!-- left: users --> 
- <div id="chat-users" style="width:300px; background:#0f1113; border-radius:12px; padding:8px;
-overflow:auto; display:flex; flex-direction:column; gap:8px;"> 
- <!-- user rows are injected here --> 
+ <!-- Left: Users List --> 
+ <div id="chat-users" style="width:300px; background:#0f1113; border-radius:12px; padding:8px; overflow:auto; display:flex; flex-direction:column; gap:8px;"> 
  <div style="padding:12px;color:#999">Loading users…</div> 
  </div> 
-
-
- <div id="incoming-call-box" class="incoming-call" style="display:none">
-  <p>📞 Customer is calling...</p>
-  <button onclick="answerCall()">Answer</button>
-  <button onclick="declineCall()">Decline</button>
-</div>
-
- <!-- right: chat panel --> 
+ 
+ <!-- Right: Chat Panel --> 
  <div style="flex:1; display:flex; flex-direction:column; min-width:0; gap:10px;"> 
- <div id="chat-panel-header" style="background:#0f1113; padding:12px; border-radius:8px;
-display:flex; align-items:center; justify-content:space-between;"> 
+ <div id="chat-panel-header" style="background:#0f1113; padding:12px; border-radius:8px; display:flex; align-items:center; justify-content:space-between;"> 
  <div style="display:flex;gap:12px;align-items:center;"> 
- <div id="chat-avatar" style="width:48px;height:48px;borderradius:50%;background:#3498db;color:#fff;display:flex;align-items:center;justify-content:center;fontweight:700;font-size:1rem;">U</div> 
+ <div id="chat-avatar" style="width:48px;height:48px;border-radius:50%;background:#3498db;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;">U</div> 
  <div> 
  <div id="chat-with" style="font-weight:700;color:#fff">Select a customer</div> 
  <div id="chat-last-seen" style="font-size:0.8rem;color:#9b9b9b">—</div> 
  </div> 
  </div> 
- 
  <div style="display:flex;gap:8px;align-items:center;"> 
  <button id="btn-call" class="btn small" onclick="startCallToSelectedUser()">📞 Call</button> 
- <button id="btn-hangup" class="btn small"
-style="display:none;background:#e74c3c;color:#fff" onclick="hangupCall()">Hang up</button> 
+ <button id="btn-hangup" class="btn small" style="display:none;background:#e74c3c;color:#fff" onclick="endCall()">Hang up</button> 
  </div> 
  </div> 
  
- <div id="chat-admin-messages" style="flex:1; background:#070708; border-radius:8px;
-padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px;"> 
+ <div id="chat-admin-messages" style="flex:1; background:#070708; border-radius:8px; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px;"> 
  <div style="color:#9b9b9b">Open a chat to view messages.</div> 
  </div> 
  
  <div id="chat-typing" style="min-height:18px;color:#9b9b9b;font-size:0.9rem"></div> 
  
  <div style="display:flex; gap:8px;"> 
- <input id="admin-chat-input" placeholder="Type a message..." style="flex:1; padding:10px
-12px; border-radius:20px; border:1px solid #333; background:#0b0c0e; color:#eee;"> 
+ <input id="admin-chat-input" placeholder="Type a message..." style="flex:1; padding:10px 12px; border-radius:20px; border:1px solid #333; background:#0b0c0e; color:#eee;"> 
  <button class="btn primary" onclick="adminSendChat()">Send</button> 
  </div> 
  
  <div style="display:flex; gap:8px; margin-top:6px;"> 
- <button class="btn ghost" onclick="insertQuickReply('Hello! How can I help you
-today?')">Quick: Hello</button> 
- <button class="btn ghost" onclick="insertQuickReply('Your order is being processed. I will
-update you soon.')">Quick: Order update</button> 
- <button class="btn ghost" onclick="insertQuickReply('Can you share a photo of the
-issue?')">Quick: Ask photo</button> 
+ <button class="btn ghost" onclick="insertQuickReply('Hello! How can I help you today?')">Quick: Hello</button> 
+ <button class="btn ghost" onclick="insertQuickReply('Your order is being processed. I will update you soon.')">Quick: Order update</button> 
+ <button class="btn ghost" onclick="insertQuickReply('Can you share a photo of the issue?')">Quick: Ask photo</button> 
  </div> 
  </div> 
  </div> 
  </div> 
-</section> 
- 
- 
- 
+ </section> 
  
  <!-- Orders Tab --> 
  <section id="tab-orders" style="display:none"> 
@@ -593,8 +784,9 @@ issue?')">Quick: Ask photo</button>
  <canvas id="salesChart" height="250"></canvas> 
  </div> 
  </section> 
-<!-- Settings Tab --> 
-<section id="tab-settings" style="display:none"> 
+ 
+ <!-- Settings Tab --> 
+ <section id="tab-settings" style="display:none"> 
  <div class="card"> 
  <h3>Store Settings</h3> 
  <form id="settings-form" onsubmit="saveSettings(event)"> 
@@ -613,9 +805,38 @@ issue?')">Quick: Ask photo</button>
  <button type="submit" class="btn primary">Save Settings</button> 
  </form> 
  </div> 
-</section> 
+ </section> 
  </main> 
 </div> 
+
+<!-- Incoming Call Notification -->
+<div id="incoming-call-box" class="incoming-call" style="display:none">
+  <p>📞 Customer is calling...</p>
+  <button onclick="answerCall()" class="btn primary">Answer</button>
+  <button onclick="declineCall()" class="btn ghost">Decline</button>
+</div>
+
+<!-- Call Modal -->
+<div id="call-modal" class="modal" style="display: none;">
+    <div class="modal-inner">
+        <h3>Video Call</h3>
+        <div class="call-video-container">
+            <div class="call-video-box">
+                <h4>Your Video</h4>
+                <video id="local-video" autoplay muted></video>
+            </div>
+            <div class="call-video-box">
+                <h4>Customer Video</h4>
+                <video id="remote-video" autoplay></video>
+            </div>
+        </div>
+        <div style="text-align: center; margin-top: 20px;">
+            <button onclick="endCall()" class="btn-logout" style="padding: 12px 24px; font-size: 1.1rem;">
+                📞 End Call
+            </button>
+        </div>
+    </div>
+</div>
  
 <!-- Chart.js --> 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
@@ -628,147 +849,224 @@ issue?')">Quick: Ask photo</button>
 <script src="script.js"></script> 
  
 <script> 
+// ---------- ADMIN DASHBOARD FUNCTIONS ----------
 function showTab(tab){ 
- ['products','orders','sales','settings','chat'].forEach(t=>{ 
- document.getElementById('tab-'+t).style.display=(t===tab)?'block':'none'; 
- document.querySelectorAll('.sidebar button').forEach(btn=>{ 
- if(btn.textContent.toLowerCase()===t) btn.classList.toggle('active', t===tab); 
- }); 
- }); 
-} 
+    ['products','orders','sales','settings','chat'].forEach(t=>{ 
+        document.getElementById('tab-'+t).style.display = (t === tab) ? 'block' : 'none'; 
+        document.querySelectorAll('.sidebar button').forEach(btn=>{ 
+            if (btn.textContent.toLowerCase() === t) 
+                btn.classList.toggle('active', t === tab); 
+        }); 
+    }); 
  
-// Products rendering with Firestore imgUrl 
+    // Load settings only when tab is opened 
+    if (tab === 'settings') loadSettings(); 
+} 
+
+// ---------- PRODUCT MANAGEMENT ----------
 function renderAdminProducts(){ 
- const container = document.getElementById('admin-product-list'); 
- db.collection('products').orderBy('createdAt','desc').get().then(snapshot=>{ 
- const products=[]; 
- snapshot.forEach(doc=>{ 
- const p = doc.data(); 
- p.id = doc.id; 
- const searchValue = (document.getElementById('admin-search').value||'').toLowerCase(); 
- if(!searchValue || p.title.toLowerCase().includes(searchValue) ||
-(p.category||'').toLowerCase().includes(searchValue)){ 
- products.push(p); 
- } 
- }); 
+    const container = document.getElementById('admin-product-list'); 
+    if (!container) return;
+    
+    Firestore.products().orderBy('createdAt','desc').get().then(snapshot=>{ 
+        const products=[]; 
+        snapshot.forEach(doc=>{ 
+            const p = doc.data(); 
+            p.id = doc.id; 
+            const searchValue = (document.getElementById('admin-search').value||'').toLowerCase(); 
+            if(!searchValue || p.title.toLowerCase().includes(searchValue) || (p.category||'').toLowerCase().includes(searchValue)){ 
+                products.push(p); 
+            } 
+        }); 
  
- container.innerHTML = products.map(p=> 
- <div class="product-card"> 
- <img src="${p.imgUrl||'https://via.placeholder.com/150'}" alt="${p.title}"> 
- <div class="product-info"> 
- <h4>${p.title}</h4> 
- <p>₱${p.price.toLocaleString()}</p> 
- <p>Stock: ${p.stock||0}</p> 
- <p>Category: ${p.category||''}</p> 
- <div class="actions"> 
- <button class="btn small primary" onclick="editProduct('${p.id}')">Edit</button> 
- <button class="btn small ghost" onclick="deleteProduct('${p.id}')">Delete</button> 
- </div> 
- </div> 
- </div> 
- ).join(''); 
- }); 
+        container.innerHTML = products.map(p=> 
+            `<div class="product-card"> 
+                <img src="${p.imgUrl||Utils.placeholderDataURL(p.title)}" alt="${p.title}"> 
+                <div class="product-info"> 
+                    <h4>${Formatter.escapeHtml(p.title)}</h4> 
+                    <p>${Formatter.money(p.price)}</p> 
+                    <p>Stock: ${p.stock||0}</p> 
+                    <p>Category: ${Formatter.escapeHtml(p.category||'')}</p> 
+                    <div class="actions"> 
+                        <button class="btn small primary" onclick="editProduct('${p.id}')">Edit</button> 
+                        <button class="btn small ghost" onclick="deleteProduct('${p.id}')">Delete</button> 
+                    </div> 
+                </div> 
+            </div>` 
+        ).join(''); 
+    }); 
 } 
- 
-// Sales chart 
+
+// ---------- SALES CHART ----------
 let salesChart; 
 function renderSalesChart(){ 
- const ctx = document.getElementById('salesChart').getContext('2d'); 
- db.collection('orders').orderBy('createdAt').get().then(snapshot=>{ 
- const labels = [], data = []; 
- snapshot.forEach(doc=>{ 
- const o = doc.data(); 
- const date = o.createdAt?.toDate().toLocaleDateString() || ''; 
- labels.push(date); 
- data.push(o.total||0); 
- }); 
- if(salesChart) salesChart.destroy(); 
- salesChart = new Chart(ctx,{ 
- type:'line', 
- data:{labels, datasets:[{label:'Order Total', data, borderColor:'#3498db',
-backgroundColor:'rgba(52,152,219,0.2)'}]}, 
- options:{responsive:true, plugins:{legend:{display:false}}} 
- }); 
- }); 
+    const ctx = document.getElementById('salesChart').getContext('2d'); 
+    Firestore.orders().orderBy('createdAt').get().then(snapshot=>{ 
+        const labels = [], data = []; 
+        snapshot.forEach(doc=>{ 
+            const o = doc.data(); 
+            const date = o.createdAt?.toDate().toLocaleDateString() || ''; 
+            labels.push(date); 
+            data.push(o.total||0); 
+        }); 
+        if(salesChart) salesChart.destroy(); 
+        salesChart = new Chart(ctx,{ 
+            type:'line', 
+            data:{labels, datasets:[{label:'Order Total', data, borderColor:'#3498db', backgroundColor:'rgba(52,152,219,0.2)'}]}, 
+            options:{responsive:true, plugins:{legend:{display:false}}} 
+        }); 
+    }); 
 } 
- 
-// Load admin dashboard 
-window.addEventListener('load', () => { 
- bindAuthState(); 
- initAdmin(); 
- initAdminOrders(); 
- renderAdminProducts(); 
- renderSalesChart(); 
- 
- console.log("✅ Admin page loaded. Initializing chat listener..."); 
- initChat(); // <-- REQUIRED 
-}); 
- 
- 
- 
- // Sales metrics 
- ordersRef().onSnapshot(snapshot=>{ 
- let totalRevenue=0; 
- snapshot.forEach(doc=>{ totalRevenue+=doc.data().total||0; }); 
- document.getElementById('total-revenue').textContent='₱'+totalRevenue.toLocaleString(); 
- document.getElementById('total-orders').textContent=snapshot.size; 
- }); 
- 
-</script> 
-<script> 
-// ---------- SETTINGS ---------- 
+
+// ---------- SETTINGS MANAGEMENT ----------
 function loadSettings() { 
- db.collection('settings').doc('store').get().then(doc => { 
- if (doc.exists) { 
- const s = doc.data(); 
- document.getElementById('store-name').value = s.name || ''; 
- document.getElementById('store-logo').value = s.logo || ''; 
- document.getElementById('store-email').value = s.email || ''; 
- document.getElementById('store-phone').value = s.phone || ''; 
- } 
- }).catch(err => console.error('Error loading settings:', err)); 
+    db.collection('settings').doc('store').get().then(doc => { 
+        if (doc.exists) { 
+            const s = doc.data(); 
+            document.getElementById('store-name').value = s.name || ''; 
+            document.getElementById('store-logo').value = s.logo || ''; 
+            document.getElementById('store-email').value = s.email || ''; 
+            document.getElementById('store-phone').value = s.phone || ''; 
+        } 
+    }).catch(err => console.error('Error loading settings:', err)); 
 } 
  
 function saveSettings(e) { 
- e.preventDefault(); 
- const name = document.getElementById('store-name').value; 
- const logo = document.getElementById('store-logo').value; 
- const email = document.getElementById('store-email').value; 
- const phone = document.getElementById('store-phone').value; 
+    e.preventDefault(); 
+    const name = document.getElementById('store-name').value; 
+    const logo = document.getElementById('store-logo').value; 
+    const email = document.getElementById('store-email').value; 
+    const phone = document.getElementById('store-phone').value; 
  
- db.collection('settings').doc('store').set({ 
- name, logo, email, phone, updatedAt: new Date() 
- }).then(() => { 
- alert('Settings saved successfully!'); 
- }).catch(err => { 
- console.error('Error saving settings:', err); 
- alert('Failed to save settings.'); 
- }); 
-} 
- 
-// Auto-load when Settings tab is opened 
-function showTab(tab){ 
- ['products','orders','sales','settings','chat'].forEach(t=>{ 
- document.getElementById('tab-'+t).style.display = (t === tab) ? 'block' : 'none'; 
- 
- document.querySelectorAll('.sidebar button').forEach(btn=>{ 
- if (btn.textContent.toLowerCase() === t) 
- btn.classList.toggle('active', t === tab); 
- }); 
- }); 
- 
- // Load settings only when tab is opened 
- if (tab === 'settings') loadSettings(); 
+    Firestore.settings().doc('store').set({ 
+        name, logo, email, phone, updatedAt: new Date() 
+    }).then(() => { 
+        alert('Settings saved successfully!'); 
+    }).catch(err => { 
+        console.error('Error saving settings:', err); 
+        alert('Failed to save settings.'); 
+    }); 
 } 
 
+// ---------- CALL FUNCTIONS FOR ADMIN ----------
+let currentIncomingCallId = null;
+
+function startCallToSelectedUser() {
+    if (!currentAdminChatUser) {
+        alert('Please select a customer to call first.');
+        return;
+    }
+    startCallAsAdmin(currentAdminChatUser);
+}
+
+function answerCall() {
+    if (currentIncomingCallId) {
+        acceptCall(currentIncomingCallId);
+        document.getElementById('incoming-call-box').style.display = 'none';
+        currentIncomingCallId = null;
+    }
+}
+
+function declineCall() {
+    if (currentIncomingCallId) {
+        Firestore.calls().doc(currentIncomingCallId).update({ state: 'ended' });
+        document.getElementById('incoming-call-box').style.display = 'none';
+        currentIncomingCallId = null;
+    }
+}
+
+// Enhanced incoming call handler for admin
+function handleIncomingCall(callId, callData) {
+    currentIncomingCallId = callId;
+    
+    const incomingCallBox = document.getElementById('incoming-call-box');
+    if (incomingCallBox) {
+        const callerName = callData.callerId || callData.callerName || 'Customer';
+        incomingCallBox.innerHTML = `
+            <p>📞 Incoming call from ${callerName}</p>
+            <button onclick="answerCall()" class="btn primary">Answer</button>
+            <button onclick="declineCall()" class="btn ghost">Decline</button>
+        `;
+        incomingCallBox.style.display = 'block';
+    }
+}
+
+// Override the CallManager's handleIncomingCall for admin-specific UI
+CallManager.handleIncomingCall = function(callId, callData) {
+    handleIncomingCall(callId, callData);
+};
+
+// Update call UI when call starts/ends
+function updateCallUI(isInCall) {
+    const callBtn = document.getElementById('btn-call');
+    const hangupBtn = document.getElementById('btn-hangup');
+    
+    if (callBtn) callBtn.style.display = isInCall ? 'none' : 'block';
+    if (hangupBtn) hangupBtn.style.display = isInCall ? 'block' : 'none';
+}
+
+// Override CallManager UI methods for admin
+const originalShowCallUI = CallManager.showCallUI;
+const originalHideCallUI = CallManager.hideCallUI;
+
+CallManager.showCallUI = function() {
+    originalShowCallUI.call(this);
+    updateCallUI(true);
+};
+
+CallManager.hideCallUI = function() {
+    originalHideCallUI.call(this);
+    updateCallUI(false);
+};
+
+// Quick reply function
+function insertQuickReply(text) {
+    const input = document.getElementById('admin-chat-input');
+    if (input) {
+        input.value = text;
+        input.focus();
+    }
+}
+
+// Initialize admin-specific call features
+function initAdminCallFeatures() {
+    // Listen for call state changes to update UI
+    if (CallManager.currentCallId) {
+        Firestore.calls().doc(CallManager.currentCallId).onSnapshot((snap) => {
+            const data = snap.data();
+            if (data && data.state === 'ended') {
+                updateCallUI(false);
+            }
+        });
+    }
+}
+
+// ---------- ADMIN DASHBOARD INITIALIZATION ----------
+window.addEventListener('load', () => { 
+    bindAuthState(); 
+    initAdmin(); 
+    initAdminOrders(); 
+    renderAdminProducts(); 
+    renderSalesChart(); 
+    
+    console.log("✅ Admin page loaded. Initializing chat listener..."); 
+    initChat(); 
+    
+    // Initialize call features after auth state is determined
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            initAdminCallFeatures();
+            
+            // Sales metrics 
+            Firestore.orders().onSnapshot(snapshot=>{ 
+                let totalRevenue=0; 
+                snapshot.forEach(doc=>{ totalRevenue+=doc.data().total||0; }); 
+                document.getElementById('total-revenue').textContent=Formatter.money(totalRevenue); 
+                document.getElementById('total-orders').textContent=snapshot.size; 
+            });
+        }
+    });
+});
 </script> 
 </body> 
-</html> 
- 
-
-
-
-
-
-
-
+</html>
