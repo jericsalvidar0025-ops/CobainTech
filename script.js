@@ -56,6 +56,7 @@ window.addEventListener('load', () => {
     bindAuthState();
     initIndex();
     initAdmin();
+    initChat(); // Add this line - it was missing!
     initCustomerOrders();
 });
 
@@ -1082,6 +1083,63 @@ function toggleScreenShare() {
 
 function toggleRemoteAudio() {
     CallManager.toggleRemoteAudio();
+}
+
+/* ---------- Chat System Variables ---------- */
+const TYPING_DEBOUNCE_MS = 1200;
+let typingTimer = null;
+let customerChatUnsub = null;
+let adminUsersUnsub = null;
+let adminMessagesUnsub = null;
+let currentAdminChatUser = null;
+let chatUsersCache = {};
+
+/* ---------- Chat System Initialization ---------- */
+function initChat(){
+    auth.onAuthStateChanged(user => {
+        // Store (customer) view
+        if (DOM.q('#chat-messages')) {
+            if (user) startCustomerChat(user.uid, user.displayName || null);
+            else {
+                const box = DOM.q('#chat-messages');
+                if (box) box.innerHTML = `<div style="padding:12px;color:#ddd">Please login to chat with us.</div>`;
+            }
+        }
+
+        // Admin view
+        if (DOM.q('#chat-users')) {
+            loadChatUsersRealtime();
+            // request permission for browser notifications
+            if ("Notification" in window && Notification.permission !== 'granted') {
+                Notification.requestPermission().catch(()=>{});
+            }
+            // start watcher for new messages (for notifications and global badge)
+            startGlobalNotificationWatcher();
+            // listen for incoming call requests (if admin)
+            listenForCallRequests();
+        }
+    });
+
+    // Wire chat input (customer store)
+    const chatInputEl = DOM.q('#chat-input');
+    if (chatInputEl) {
+        chatInputEl.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChat();
+            }
+        });
+        chatInputEl.addEventListener('input', debounceCustomerTyping);
+    }
+
+    // Wire admin send Enter
+    const adminInput = DOM.q('#admin-chat-input');
+    if (adminInput) adminInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            adminSendChat();
+        }
+    });
 }
 
 /* ---------- CUSTOMER-side chat ---------- */
@@ -2125,6 +2183,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
