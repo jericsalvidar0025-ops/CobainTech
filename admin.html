@@ -983,6 +983,7 @@ function saveSettings(e) {
 
 // ---------- CALL FUNCTIONS FOR ADMIN ----------
 let currentIncomingCallId = null;
+let isAdminCallInitialized = false;
 
 function startCallToSelectedUser() {
     if (!currentAdminChatUser) {
@@ -990,49 +991,38 @@ function startCallToSelectedUser() {
         return;
     }
     
+    console.log("📞 Admin starting call to:", currentAdminChatUser);
     // Store the user ID and show the call options modal
     window.pendingAdminCallUserId = currentAdminChatUser;
-    CallManager.showCallOptionsModal(false);
+    
+    // Use the unified call options modal
+    const modal = document.getElementById('call-options-modal');
+    if (modal) {
+        const title = modal.querySelector('h3');
+        if (title) title.textContent = 'Start Call With...';
+        modal.style.display = 'flex';
+    }
 }
 
 function answerCall() {
     if (currentIncomingCallId) {
-        // Use the existing function that handles call options
-        CallManager.showCallOptionsModal(true);
+        console.log("📞 Admin answering call:", currentIncomingCallId);
+        // Use the unified call options modal for answering
+        const modal = document.getElementById('call-options-modal');
+        if (modal) {
+            const title = modal.querySelector('h3');
+            if (title) title.textContent = 'Answer Call With...';
+            modal.style.display = 'flex';
+        }
     }
 }
 
 function declineCall() {
     if (currentIncomingCallId) {
+        console.log("📞 Admin declining call:", currentIncomingCallId);
         CallManager.declineCall(currentIncomingCallId);
         document.getElementById('incoming-call-box').style.display = 'none';
         currentIncomingCallId = null;
-    }
-}
-
-// Enhanced incoming call handler for admin
-function handleIncomingCall(callId, callData) {
-    currentIncomingCallId = callId;
-    
-    const incomingCallBox = document.getElementById('incoming-call-box');
-    if (incomingCallBox) {
-        const callerName = callData.callerId || callData.callerName || 'Customer';
-        incomingCallBox.innerHTML = `
-            <p>📞 Incoming call from ${callerName}</p>
-            <div style="margin: 10px 0;">
-                <label style="display: block; margin: 5px 0;">
-                    <input type="checkbox" id="incoming-video" checked> Video
-                </label>
-                <label style="display: block; margin: 5px 0;">
-                    <input type="checkbox" id="incoming-audio" checked> Audio
-                </label>
-            </div>
-            <div style="display: flex; gap: 10px; justify-content: center;">
-                <button onclick="answerIncomingCallWithOptions()" class="btn primary">Answer</button>
-                <button onclick="declineCall()" class="btn ghost">Decline</button>
-            </div>
-        `;
-        incomingCallBox.style.display = 'block';
     }
 }
 
@@ -1042,6 +1032,7 @@ function answerIncomingCallWithOptions() {
         const videoEnabled = document.getElementById('incoming-video')?.checked ?? true;
         const audioEnabled = document.getElementById('incoming-audio')?.checked ?? true;
         
+        console.log("📞 Admin answering call with options:", { videoEnabled, audioEnabled });
         CallManager.stopRingtone();
         CallManager.answerCall(currentIncomingCallId, videoEnabled, audioEnabled);
         document.getElementById('incoming-call-box').style.display = 'none';
@@ -1049,10 +1040,66 @@ function answerIncomingCallWithOptions() {
     }
 }
 
-// Override the CallManager's handleIncomingCall for admin-specific UI
+// Override the CallManager's handleIncomingCall to prevent duplicate handling
+const originalHandleIncomingCall = CallManager.handleIncomingCall;
 CallManager.handleIncomingCall = function(callId, callData) {
-    console.log("📞 Admin: Incoming call received", callId);
-    handleIncomingCall(callId, callData);
+    console.log("📞 CallManager: Incoming call received", callId);
+    
+    // Only handle calls in admin panel if we're on admin page
+    if (document.getElementById('admin-orders')) {
+        console.log("📞 Admin page handling call");
+        currentIncomingCallId = callId;
+        
+        const incomingCallBox = document.getElementById('incoming-call-box');
+        if (incomingCallBox) {
+            const callerName = callData.callerId || callData.callerName || 'Customer';
+            incomingCallBox.innerHTML = `
+                <p>📞 Incoming call from ${callerName}</p>
+                <div style="margin: 10px 0;">
+                    <label style="display: block; margin: 5px 0;">
+                        <input type="checkbox" id="incoming-video" checked> Video
+                    </label>
+                    <label style="display: block; margin: 5px 0;">
+                        <input type="checkbox" id="incoming-audio" checked> Audio
+                    </label>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button onclick="answerIncomingCallWithOptions()" class="btn primary">Answer</button>
+                    <button onclick="declineCall()" class="btn ghost">Decline</button>
+                </div>
+            `;
+            incomingCallBox.style.display = 'block';
+        }
+        
+        // Play ringtone for admin
+        CallManager.playRingtone();
+    } else {
+        // If not on admin page, use original handler
+        originalHandleIncomingCall.call(this, callId, callData);
+    }
+};
+
+// Override CallManager's showCallOptionsModal to prevent conflicts
+CallManager.showCallOptionsModal = function(isIncoming = true) {
+    console.log("📞 showCallOptionsModal called, isIncoming:", isIncoming);
+    
+    const modal = document.getElementById('call-options-modal');
+    if (modal) {
+        const title = modal.querySelector('h3');
+        if (title) {
+            title.textContent = isIncoming ? 'Answer Call With...' : 'Start Call With...';
+        }
+        
+        const videoCheckbox = document.getElementById('option-video');
+        const audioCheckbox = document.getElementById('option-audio');
+        
+        if (videoCheckbox && audioCheckbox) {
+            videoCheckbox.checked = true;
+            audioCheckbox.checked = true;
+        }
+        
+        modal.style.display = 'flex';
+    }
 };
 
 // Update call UI when call starts/ends
@@ -1065,18 +1112,39 @@ function updateCallUI(isInCall) {
 }
 
 // Override CallManager UI methods for admin
-const originalShowCallUI = CallManager.showCallUI;
-const originalHideCallUI = CallManager.hideCallUI;
-
 CallManager.showCallUI = function() {
-    originalShowCallUI.call(this);
+    const modal = document.getElementById('call-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        console.log("✅ Call UI shown");
+    }
+    
+    this.updateCallButtons(true);
+    this.updateMediaButtons();
     updateCallUI(true);
 };
 
 CallManager.hideCallUI = function() {
-    originalHideCallUI.call(this);
+    const modal = document.getElementById('call-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+
+    const remoteVideo = document.getElementById('remote-video');
+    const localVideo = document.getElementById('local-video');
+    
+    if (remoteVideo) {
+        remoteVideo.srcObject = null;
+        remoteVideo.load();
+    }
+    if (localVideo) {
+        localVideo.srcObject = null;
+        localVideo.load();
+    }
+    
+    this.updateCallButtons(false);
     updateCallUI(false);
-    document.getElementById('incoming-call-box').style.display = 'none';
+    console.log("✅ Call UI hidden");
 };
 
 // Quick reply function
@@ -1090,7 +1158,24 @@ function insertQuickReply(text) {
 
 // Initialize admin-specific call features
 function initAdminCallFeatures() {
+    if (isAdminCallInitialized) return;
+    
     console.log("📞 Initializing admin call features...");
+    isAdminCallInitialized = true;
+    
+    // Make sure the call options modal is properly set up
+    const callOptionsModal = document.getElementById('call-options-modal');
+    if (callOptionsModal) {
+        // Ensure it starts hidden
+        callOptionsModal.style.display = 'none';
+        
+        // Add click handler for the modal background to close it
+        callOptionsModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                cancelCallWithOptions();
+            }
+        });
+    }
     
     // Listen for call state changes to update UI
     if (CallManager.currentCallId) {
@@ -1101,13 +1186,43 @@ function initAdminCallFeatures() {
             }
         });
     }
+}
+
+// Global call option functions (these should work for both admin and customer)
+function startCallWithOptions() {
+    const videoEnabled = document.getElementById('option-video')?.checked ?? true;
+    const audioEnabled = document.getElementById('option-audio')?.checked ?? true;
     
-    // Ensure call options modal is properly handled
-    const callOptionsModal = document.getElementById('call-options-modal');
-    if (callOptionsModal) {
-        // Make sure it's hidden initially
-        callOptionsModal.style.display = 'none';
+    console.log("📞 startCallWithOptions:", { videoEnabled, audioEnabled });
+    
+    // Hide the options modal
+    const modal = document.getElementById('call-options-modal');
+    if (modal) modal.style.display = 'none';
+    
+    if (window.pendingAdminCallUserId) {
+        // Admin calling a customer
+        CallManager.startCallAsAdmin(window.pendingAdminCallUserId, videoEnabled, audioEnabled);
+        window.pendingAdminCallUserId = null;
+    } else {
+        // Customer calling admin (shouldn't happen in admin panel, but just in case)
+        CallManager.startCallAsCustomer(videoEnabled, audioEnabled);
     }
+}
+
+function cancelCallWithOptions() {
+    console.log("📞 Cancelling call options");
+    
+    const modal = document.getElementById('call-options-modal');
+    if (modal) modal.style.display = 'none';
+    
+    window.pendingAdminCallUserId = null;
+    CallManager.stopRingtone();
+    
+    // Also hide incoming call box if it's visible
+    const incomingCallBox = document.getElementById('incoming-call-box');
+    if (incomingCallBox) incomingCallBox.style.display = 'none';
+    
+    currentIncomingCallId = null;
 }
 
 // ---------- ADMIN DASHBOARD INITIALIZATION ----------
@@ -1122,21 +1237,26 @@ window.addEventListener('load', () => {
     initChat(); // This was missing - now added!
     
     // Initialize call features after auth state is determined
-    auth.onAuthStateChanged(user => {
-        if (user) {
+   // Initialize admin-specific call features after auth state is determined
+auth.onAuthStateChanged(user => {
+    if (user) {
+        // Small delay to ensure CallManager is fully initialized
+        setTimeout(() => {
             initAdminCallFeatures();
-            
-            // Sales metrics 
-            Firestore.orders().onSnapshot(snapshot=>{ 
-                let totalRevenue=0; 
-                snapshot.forEach(doc=>{ totalRevenue+=doc.data().total||0; }); 
-                document.getElementById('total-revenue').textContent=Formatter.money(totalRevenue); 
-                document.getElementById('total-orders').textContent=snapshot.size; 
-            });
-        }
-    });
+        }, 500);
+        
+        // Sales metrics 
+        Firestore.orders().onSnapshot(snapshot=>{ 
+            let totalRevenue=0; 
+            snapshot.forEach(doc=>{ totalRevenue+=doc.data().total||0; }); 
+            document.getElementById('total-revenue').textContent=Formatter.money(totalRevenue); 
+            document.getElementById('total-orders').textContent=snapshot.size; 
+        });
+    }
+});
 });
 </script> 
 </body> 
 </html>
+
 
