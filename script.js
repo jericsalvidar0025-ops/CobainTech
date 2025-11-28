@@ -189,41 +189,88 @@ const CallManager = {
     },
 
     // Media Management
-    async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
-        try {
-            console.log("🎥 Preparing local media...");
-            
-            const constraints = {
-                audio: audioEnabled ? {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                } : false,
-                video: videoEnabled ? {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
-                } : false
-            };
+   async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
+    try {
+        console.log("🎥 Preparing local media...");
+        
+        // Check available devices first
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasCamera = devices.some(device => device.kind === 'videoinput');
+        const hasMicrophone = devices.some(device => device.kind === 'audioinput');
+        
+        console.log("📷 Available cameras:", hasCamera);
+        console.log("🎤 Available microphones:", hasMicrophone);
 
-            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            
-            const localEl = document.getElementById('local-video');
-            if (localEl) {
-                localEl.srcObject = this.localStream;
-                localEl.muted = true;
-                console.log("✅ Local media ready");
-            }
+        // Use simpler constraints that work across browsers
+        const constraints = {
+            audio: audioEnabled && hasMicrophone ? {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 1
+            } : false,
+            video: videoEnabled && hasCamera ? {
+                width: { min: 640, ideal: 1280, max: 1920 },
+                height: { min: 480, ideal: 720, max: 1080 },
+                frameRate: { ideal: 30, max: 60 },
+                facingMode: "user"
+            } : false
+        };
 
-            this.isVideoEnabled = videoEnabled;
-            this.isAudioEnabled = audioEnabled;
+        console.log("🎯 Media constraints:", constraints);
 
-        } catch (err) {
-            console.error('❌ Media access failed:', err);
-            alert('Unable to access camera/microphone. Please check permissions.');
-            throw err;
+        // If no devices available, provide better error
+        if (!constraints.audio && !constraints.video) {
+            throw new Error('No camera or microphone detected on this device');
         }
-    },
+
+        this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        // Log what we actually got
+        console.log("✅ Media stream obtained:");
+        this.localStream.getTracks().forEach(track => {
+            console.log(`  - ${track.kind}: ${track.label} (enabled: ${track.enabled})`);
+        });
+        
+        const localEl = document.getElementById('local-video');
+        if (localEl) {
+            localEl.srcObject = this.localStream;
+            localEl.muted = true;
+            localEl.playsInline = true;
+            
+            // Add event listeners to debug video element
+            localEl.addEventListener('loadedmetadata', () => {
+                console.log("✅ Local video metadata loaded");
+            });
+            localEl.addEventListener('canplay', () => {
+                console.log("✅ Local video can play");
+            });
+            localEl.addEventListener('error', (e) => {
+                console.error("❌ Local video error:", e);
+            });
+        }
+
+        this.isVideoEnabled = videoEnabled && hasCamera;
+        this.isAudioEnabled = audioEnabled && hasMicrophone;
+
+    } catch (err) {
+        console.error('❌ Media access failed:', err);
+        
+        let errorMessage = 'Unable to access camera/microphone. ';
+        if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') {
+            errorMessage += 'No camera or microphone was found or constraints could not be met.';
+        } else if (err.name === 'NotAllowedError') {
+            errorMessage += 'Please allow camera and microphone permissions in your browser.';
+        } else if (err.name === 'NotReadableError') {
+            errorMessage += 'Camera/microphone is already in use by another application.';
+        } else {
+            errorMessage += 'Please check your device permissions and connections.';
+        }
+        
+        alert(errorMessage);
+        throw err;
+    }
+},
 
     // Toggle video on/off
     async toggleVideo() {
@@ -2325,6 +2372,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
