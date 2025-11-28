@@ -790,31 +790,36 @@ const CallManager = {
     },
 
     // Listen for answer
-    listenForAnswer(callRef) {
-        callRef.onSnapshot(async (snapshot) => {
-            const data = snapshot.data();
-            if (!data) return;
+   listenForAnswer(callRef) {
+    callRef.onSnapshot(async (snapshot) => {
+        const data = snapshot.data();
+        if (!data) return;
 
-            if (data.answer && !this.peerConnection.currentRemoteDescription) {
-                console.log("✅ Answer received");
-                try {
-                    const answer = new RTCSessionDescription(data.answer);
-                    await this.peerConnection.setRemoteDescription(answer);
-                    console.log("✅ Remote description set from answer");
-                    this.stopRingtone();
-                    this.hideCallOptionsModal();
-                } catch (error) {
-                    console.error('❌ Error setting remote description:', error);
-                }
-            }
+        // ADD NULL CHECK HERE
+        if (!this.peerConnection) {
+            console.warn('Peer connection not available when answer received');
+            return;
+        }
 
-            if (data.state === 'ended') {
-                console.log("📞 Call ended by remote party");
+        if (data.answer && !this.peerConnection.currentRemoteDescription) {
+            try {
+                const answer = new RTCSessionDescription(data.answer);
+                await this.peerConnection.setRemoteDescription(answer);
+                console.log("✅ Remote description set from answer");
                 this.stopRingtone();
-                this.hangupCall();
+                this.hideCallOptionsModal();
+            } catch (error) {
+                console.error('❌ Error setting remote description:', error);
             }
-        });
-    },
+        }
+
+        if (data.state === 'ended') {
+            console.log("📞 Call ended by remote party");
+            this.stopRingtone();
+            this.hangupCall();
+        }
+    });
+}
 
     // Listen for ICE candidates
     listenForIceCandidates(callRef, candidateType) {
@@ -2182,3 +2187,4 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
