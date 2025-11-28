@@ -534,7 +534,6 @@ function listenForCallRequests() {
             Firestore.calls().doc(callId).update({ state: 'ended' });
         }
     }
-};
 
 /* ---------- Simplified Call Functions (Public Interface) ---------- */
 function startCallToAdmin() {
@@ -1654,4 +1653,5 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
