@@ -1078,9 +1078,48 @@ window.addEventListener('load', () => {
 });
 
 /* ---------- Enhanced Public Call Functions ---------- */
-function startCallToAdmin() {
-    // Show options before starting call
-    CallManager.showCallOptionsModal(false);
+async function startCallToAdmin() {
+    try {
+        // Test permissions and device availability first
+        const hasPermissions = await testMediaPermissions();
+        if (!hasPermissions) return;
+        
+        // Show options before starting call
+        CallManager.showCallOptionsModal(false);
+    } catch (error) {
+        console.error('Call setup failed:', error);
+    }
+}
+
+async function testMediaPermissions() {
+    try {
+        const { hasCamera, hasMicrophone } = await CallManager.checkMediaDevices();
+        
+        if (!hasCamera && !hasMicrophone) {
+            alert('No camera or microphone detected on this device. Calls will be audio-only.');
+            return true; // Allow continuing with audio constraints
+        }
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: hasMicrophone, 
+            video: hasCamera 
+        });
+        
+        // Stop the test stream immediately
+        stream.getTracks().forEach(track => track.stop());
+        console.log("✅ Media permissions granted");
+        return true;
+    } catch (error) {
+        console.error("❌ Media permissions denied:", error);
+        
+        if (error.name === 'NotFoundError') {
+            alert("No camera or microphone found. You can still use audio-only calls if a microphone is available.");
+            return true; // Allow continuing with adjusted constraints
+        } else {
+            alert("Please allow camera and microphone access for calls to work properly.");
+            return false;
+        }
+    }
 }
 
 function startCallAsAdmin(userId) {
@@ -2286,6 +2325,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
