@@ -816,24 +816,57 @@ input:focus, select:focus {
   <button onclick="declineCall()" class="btn ghost">Decline</button>
 </div>
 
-<!-- Call Modal -->
+<!-- Enhanced Call Modal -->
 <div id="call-modal" class="modal" style="display: none;">
     <div class="modal-inner">
-        <h3>Video Call</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>Video Call <span id="call-duration" style="font-size: 0.8em; color: #3498db;">00:00</span></h3>
+            <div id="remote-media-state" style="font-size: 0.8em; color: #95a5a6;"></div>
+        </div>
+        
         <div class="call-video-container">
             <div class="call-video-box">
                 <h4>Your Video</h4>
                 <video id="local-video" autoplay muted playsinline></video>
+                <div id="local-video-placeholder" style="display: none; justify-content: center; align-items: center; height: 100%; background: #2c3e50; color: white;">
+                    📹 Camera Off
+                </div>
             </div>
             <div class="call-video-box">
-                <h4>Customer Video</h4>
+                <h4>Remote Video</h4>
                 <video id="remote-video" autoplay playsinline></video>
+                <div id="remote-video-placeholder" style="display: none; justify-content: center; align-items: center; height: 100%; background: #2c3e50; color: white;">
+                    📹 Remote Camera Off
+                </div>
             </div>
         </div>
-        <div style="text-align: center; margin-top: 20px;">
-            <button onclick="endCall()" class="btn-logout" style="padding: 12px 24px; font-size: 1.1rem;">
-                📞 End Call
-            </button>
+        
+        <!-- Enhanced Call Controls -->
+        <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+            <button id="toggle-video-btn" class="btn small" title="Turn off camera">📹</button>
+            <button id="toggle-audio-btn" class="btn small" title="Mute microphone">🎤</button>
+            <button id="toggle-screen-share-btn" class="btn small" title="Share screen">🖥️</button>
+            <button id="mute-remote-btn" class="btn small" title="Mute remote">🔊</button>
+            <button onclick="endCall()" class="btn-logout small" title="End call">📞 End</button>
+        </div>
+    </div>
+</div>
+
+    <!-- Call Options Modal -->
+<div id="call-options-modal" class="modal" style="display: none;">
+    <div class="modal-inner">
+        <h3>Call Options</h3>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin: 10px 0;">
+                <input type="checkbox" id="option-video" checked> Enable Video
+            </label>
+            <label style="display: block; margin: 10px 0;">
+                <input type="checkbox" id="option-audio" checked> Enable Audio
+            </label>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button onclick="startCallWithOptions()" class="btn primary">Start Call</button>
+            <button onclick="cancelCallWithOptions()" class="btn ghost">Cancel</button>
         </div>
     </div>
 </div>
@@ -1070,4 +1103,5 @@ window.addEventListener('load', () => {
 </script> 
 </body> 
 </html>
+
 
