@@ -965,7 +965,7 @@ listenForAnswer(callRef) {
             this.hangupCall();
         }
     });
-}
+},
     // Listen for ICE candidates
     listenForIceCandidates(callRef, candidateType) {
         callRef.collection(candidateType).onSnapshot((snapshot) => {
@@ -2475,6 +2475,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
