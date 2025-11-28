@@ -855,7 +855,7 @@ input:focus, select:focus {
 <!-- Call Options Modal -->
 <div id="call-options-modal" class="modal" style="display: none;">
     <div class="modal-inner">
-        <h3>Call Options</h3>
+        <h3 id="call-options-title">Call Options</h3>
         <div style="margin: 20px 0;">
             <label style="display: block; margin: 10px 0;">
                 <input type="checkbox" id="option-video" checked> Enable Video
@@ -989,20 +989,22 @@ function startCallToSelectedUser() {
         alert('Please select a customer to call first.');
         return;
     }
-    startCallAsAdmin(currentAdminChatUser);
+    
+    // Store the user ID and show the call options modal
+    window.pendingAdminCallUserId = currentAdminChatUser;
+    CallManager.showCallOptionsModal(false);
 }
 
 function answerCall() {
     if (currentIncomingCallId) {
-        acceptCall(currentIncomingCallId);
-        document.getElementById('incoming-call-box').style.display = 'none';
-        currentIncomingCallId = null;
+        // Use the existing function that handles call options
+        CallManager.showCallOptionsModal(true);
     }
 }
 
 function declineCall() {
     if (currentIncomingCallId) {
-        Firestore.calls().doc(currentIncomingCallId).update({ state: 'ended' });
+        CallManager.declineCall(currentIncomingCallId);
         document.getElementById('incoming-call-box').style.display = 'none';
         currentIncomingCallId = null;
     }
@@ -1017,15 +1019,39 @@ function handleIncomingCall(callId, callData) {
         const callerName = callData.callerId || callData.callerName || 'Customer';
         incomingCallBox.innerHTML = `
             <p>📞 Incoming call from ${callerName}</p>
-            <button onclick="answerCall()" class="btn primary">Answer</button>
-            <button onclick="declineCall()" class="btn ghost">Decline</button>
+            <div style="margin: 10px 0;">
+                <label style="display: block; margin: 5px 0;">
+                    <input type="checkbox" id="incoming-video" checked> Video
+                </label>
+                <label style="display: block; margin: 5px 0;">
+                    <input type="checkbox" id="incoming-audio" checked> Audio
+                </label>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button onclick="answerIncomingCallWithOptions()" class="btn primary">Answer</button>
+                <button onclick="declineCall()" class="btn ghost">Decline</button>
+            </div>
         `;
         incomingCallBox.style.display = 'block';
     }
 }
 
+// Answer call with options from admin panel
+function answerIncomingCallWithOptions() {
+    if (currentIncomingCallId) {
+        const videoEnabled = document.getElementById('incoming-video')?.checked ?? true;
+        const audioEnabled = document.getElementById('incoming-audio')?.checked ?? true;
+        
+        CallManager.stopRingtone();
+        CallManager.answerCall(currentIncomingCallId, videoEnabled, audioEnabled);
+        document.getElementById('incoming-call-box').style.display = 'none';
+        currentIncomingCallId = null;
+    }
+}
+
 // Override the CallManager's handleIncomingCall for admin-specific UI
 CallManager.handleIncomingCall = function(callId, callData) {
+    console.log("📞 Admin: Incoming call received", callId);
     handleIncomingCall(callId, callData);
 };
 
@@ -1050,6 +1076,7 @@ CallManager.showCallUI = function() {
 CallManager.hideCallUI = function() {
     originalHideCallUI.call(this);
     updateCallUI(false);
+    document.getElementById('incoming-call-box').style.display = 'none';
 };
 
 // Quick reply function
@@ -1063,6 +1090,8 @@ function insertQuickReply(text) {
 
 // Initialize admin-specific call features
 function initAdminCallFeatures() {
+    console.log("📞 Initializing admin call features...");
+    
     // Listen for call state changes to update UI
     if (CallManager.currentCallId) {
         Firestore.calls().doc(CallManager.currentCallId).onSnapshot((snap) => {
@@ -1071,6 +1100,13 @@ function initAdminCallFeatures() {
                 updateCallUI(false);
             }
         });
+    }
+    
+    // Ensure call options modal is properly handled
+    const callOptionsModal = document.getElementById('call-options-modal');
+    if (callOptionsModal) {
+        // Make sure it's hidden initially
+        callOptionsModal.style.display = 'none';
     }
 }
 
@@ -1103,3 +1139,4 @@ window.addEventListener('load', () => {
 </script> 
 </body> 
 </html>
+
