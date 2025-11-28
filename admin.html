@@ -852,7 +852,7 @@ input:focus, select:focus {
     </div>
 </div>
 
-    <!-- Call Options Modal -->
+<!-- Call Options Modal -->
 <div id="call-options-modal" class="modal" style="display: none;">
     <div class="modal-inner">
         <h3>Call Options</h3>
@@ -1083,6 +1083,7 @@ window.addEventListener('load', () => {
     renderSalesChart(); 
     
     console.log("✅ Admin page loaded. Initializing chat listener..."); 
+    initChat(); // This was missing - now added!
     
     // Initialize call features after auth state is determined
     auth.onAuthStateChanged(user => {
@@ -1102,6 +1103,3 @@ window.addEventListener('load', () => {
 </script> 
 </body> 
 </html>
-
-
-
