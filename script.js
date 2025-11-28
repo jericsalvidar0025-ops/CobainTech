@@ -1019,6 +1019,38 @@ function answerIncomingCall() {
     }
 }
 
+// Add this function to test media permissions
+async function testMediaPermissions() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: true, 
+            video: true 
+        });
+        // Stop the test stream immediately
+        stream.getTracks().forEach(track => track.stop());
+        console.log("✅ Media permissions granted");
+        return true;
+    } catch (error) {
+        console.error("❌ Media permissions denied:", error);
+        alert("Please allow camera and microphone access for calls to work properly.");
+        return false;
+    }
+}
+
+// Update your call functions to check permissions first
+async function startCallToSelectedUser() {
+    if (!currentAdminChatUser) {
+        alert('Please select a customer to call first.');
+        return;
+    }
+    
+    // Test permissions first
+    const hasPermissions = await testMediaPermissions();
+    if (hasPermissions) {
+        startCallAsAdmin(currentAdminChatUser);
+    }
+}
+
 function answerIncomingCallWithOptions() {
     if (window.currentIncomingCallId) {
         const videoEnabled = document.getElementById('incoming-video')?.checked ?? true;
@@ -2183,6 +2215,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
