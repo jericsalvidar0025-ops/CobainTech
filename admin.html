@@ -821,22 +821,29 @@ input:focus, select:focus {
     <div class="modal-inner">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h3>Video Call <span id="call-duration" style="font-size: 0.8em; color: #3498db;">00:00</span></h3>
-            <div id="remote-media-state" style="font-size: 0.8em; color: #95a5a6;"></div>
+            <div id="call-status" style="font-size: 0.8em; color: #95a5a6;">Connecting...</div>
+        </div>
+        
+        <!-- Add connection state info -->
+        <div id="connection-info" style="background: #2c3e50; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em;">
+            <div>ICE: <span id="ice-state">-</span></div>
+            <div>Signaling: <span id="signaling-state">-</span></div>
+            <div>Connection: <span id="connection-state">-</span></div>
         </div>
         
         <div class="call-video-container">
             <div class="call-video-box">
-                <h4>Your Video</h4>
+                <h4>Your Video <span id="local-status">●</span></h4>
                 <video id="local-video" autoplay muted playsinline></video>
-                <div id="local-video-placeholder" style="display: none; justify-content: center; align-items: center; height: 100%; background: #2c3e50; color: white;">
+                <div id="local-video-placeholder" style="display: flex; justify-content: center; align-items: center; height: 100%; background: #2c3e50; color: white;">
                     📹 Camera Off
                 </div>
             </div>
             <div class="call-video-box">
-                <h4>Remote Video</h4>
+                <h4>Remote Video <span id="remote-status">●</span></h4>
                 <video id="remote-video" autoplay playsinline></video>
-                <div id="remote-video-placeholder" style="display: none; justify-content: center; align-items: center; height: 100%; background: #2c3e50; color: white;">
-                    📹 Remote Camera Off
+                <div id="remote-video-placeholder" style="display: flex; justify-content: center; align-items: center; height: 100%; background: #2c3e50; color: white;">
+                    📹 Waiting for connection...
                 </div>
             </div>
         </div>
@@ -849,8 +856,15 @@ input:focus, select:focus {
             <button id="mute-remote-btn" class="btn small" title="Mute remote">🔊</button>
             <button onclick="endCall()" class="btn-logout small" title="End call">📞 End</button>
         </div>
+        
+        <!-- Debug info (can be hidden in production) -->
+        <details style="margin-top: 15px; font-size: 0.8em;">
+            <summary>Debug Info</summary>
+            <div id="debug-info" style="background: #1a1a2c; padding: 10px; border-radius: 8px; margin-top: 10px;"></div>
+        </details>
     </div>
 </div>
+        
 
 <!-- Call Options Modal -->
 <div id="call-options-modal" class="modal" style="display: none;">
@@ -1258,5 +1272,6 @@ auth.onAuthStateChanged(user => {
 </script> 
 </body> 
 </html>
+
 
 
