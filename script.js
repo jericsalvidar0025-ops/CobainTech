@@ -725,6 +725,94 @@ const CallManager = {
         }
     },
 
+   // Add this method to CallManager
+async checkMediaDevices() {
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasCamera = devices.some(device => device.kind === 'videoinput');
+        const hasMicrophone = devices.some(device => device.kind === 'audioinput');
+        
+        console.log(`📷 Camera available: ${hasCamera}`);
+        console.log(`🎤 Microphone available: ${hasMicrophone}`);
+        
+        return { hasCamera, hasMicrophone };
+    } catch (error) {
+        console.error('❌ Device enumeration failed:', error);
+        return { hasCamera: false, hasMicrophone: false };
+    }
+},
+
+// Update the init method to not automatically access media
+init() {
+    console.log("📞 CallManager initialized");
+    this.setupRingtone();
+    this.listenForIncomingCalls();
+    this.setupCallUIListeners();
+    
+    // Don't automatically prepare media - wait for user action
+    this.checkMediaDevices().then(({ hasCamera, hasMicrophone }) => {
+        if (!hasCamera && !hasMicrophone) {
+            console.warn("⚠️ No camera or microphone detected");
+        }
+    });
+},
+
+// Update prepareLocalMedia to handle missing devices gracefully
+async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
+    try {
+        console.log("🎥 Preparing local media...");
+        
+        const { hasCamera, hasMicrophone } = await this.checkMediaDevices();
+        
+        // Adjust constraints based on available devices
+        const constraints = {
+            audio: audioEnabled && hasMicrophone ? {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            } : false,
+            video: videoEnabled && hasCamera ? {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                frameRate: { ideal: 30 }
+            } : false
+        };
+
+        // If no devices are available, show appropriate message
+        if (!constraints.audio && !constraints.video) {
+            throw new Error('No camera or microphone available on this device');
+        }
+
+        this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        const localEl = document.getElementById('local-video');
+        if (localEl) {
+            localEl.srcObject = this.localStream;
+            localEl.muted = true;
+            console.log("✅ Local media ready");
+        }
+
+        this.isVideoEnabled = videoEnabled && hasCamera;
+        this.isAudioEnabled = audioEnabled && hasMicrophone;
+
+    } catch (err) {
+        console.error('❌ Media access failed:', err);
+        
+        // Show user-friendly error message
+        let errorMessage = 'Unable to access camera/microphone. ';
+        if (err.name === 'NotFoundError') {
+            errorMessage += 'No camera or microphone was found on this device.';
+        } else if (err.name === 'NotAllowedError') {
+            errorMessage += 'Please allow camera and microphone permissions.';
+        } else {
+            errorMessage += 'Please check your device permissions and connections.';
+        }
+        
+        alert(errorMessage);
+        throw err;
+    }
+},
+
     // Hide call options modal
     hideCallOptionsModal() {
         const optionsModal = document.getElementById('call-options-modal');
@@ -818,6 +906,7 @@ const CallManager = {
         this.stopCallTimer();
         this.cleanup();
     },
+
 
     // Cleanup resources
     cleanup() {
@@ -1016,24 +1105,6 @@ function answerIncomingCall() {
         const incomingCallBox = document.getElementById('incoming-call-box');
         if (incomingCallBox) incomingCallBox.style.display = 'none';
         window.currentIncomingCallId = null;
-    }
-}
-
-// Add this function to test media permissions
-async function testMediaPermissions() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: true, 
-            video: true 
-        });
-        // Stop the test stream immediately
-        stream.getTracks().forEach(track => track.stop());
-        console.log("✅ Media permissions granted");
-        return true;
-    } catch (error) {
-        console.error("❌ Media permissions denied:", error);
-        alert("Please allow camera and microphone access for calls to work properly.");
-        return false;
     }
 }
 
@@ -2215,6 +2286,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
