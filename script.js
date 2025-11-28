@@ -544,6 +544,76 @@ const CallManager = {
             }
         };
 
+       // Handle connection state
+this.peerConnection.onconnectionstatechange = () => {
+    const state = this.peerConnection.connectionState;
+    console.log(`🔌 Connection state: ${state}`);
+    
+    // Update UI
+    const connectionStateEl = document.getElementById('connection-state');
+    if (connectionStateEl) connectionStateEl.textContent = state;
+    
+    if (state === 'connected') {
+        console.log("✅ Call connected!");
+        this.showCallConnected();
+        this.stopRingtone();
+        this.startCallTimer();
+        
+        const statusEl = document.getElementById('call-status');
+        if (statusEl) statusEl.textContent = 'Connected';
+        if (statusEl) statusEl.style.color = '#2ecc71';
+    } else if (state === 'failed') {
+        console.error("❌ Call connection failed");
+        const statusEl = document.getElementById('call-status');
+        if (statusEl) statusEl.textContent = 'Connection Failed';
+        if (statusEl) statusEl.style.color = '#e74c3c';
+        alert("Call connection failed. Please try again.");
+        this.hangupCall();
+    }
+};
+
+this.peerConnection.oniceconnectionstatechange = () => {
+    const state = this.peerConnection.iceConnectionState;
+    console.log(`🧊 ICE connection state: ${state}`);
+    
+    const iceStateEl = document.getElementById('ice-state');
+    if (iceStateEl) iceStateEl.textContent = state;
+};
+
+this.peerConnection.onsignalingstatechange = () => {
+    const state = this.peerConnection.signalingState;
+    console.log(`📡 Signaling state: ${state}`);
+    
+    const signalingStateEl = document.getElementById('signaling-state');
+    if (signalingStateEl) signalingStateEl.textContent = state;
+};
+
+// Track remote stream
+this.peerConnection.ontrack = (event) => {
+    console.log("📹 Remote track received:", event.track.kind, event.track.id);
+    
+    if (event.streams && event.streams[0]) {
+        const remoteEl = document.getElementById('remote-video');
+        if (remoteEl) {
+            remoteEl.srcObject = event.streams[0];
+            console.log("✅ Remote stream attached to video element");
+            
+            // Add event listeners to debug remote video
+            remoteEl.addEventListener('loadedmetadata', () => {
+                console.log("✅ Remote video metadata loaded");
+                document.getElementById('remote-status').style.color = '#2ecc71';
+            });
+            remoteEl.addEventListener('canplay', () => {
+                console.log("✅ Remote video can play");
+            });
+            remoteEl.addEventListener('error', (e) => {
+                console.error("❌ Remote video error:", e);
+                document.getElementById('remote-status').style.color = '#e74c3c';
+            });
+        }
+    }
+};
+
         // Handle connection state
         this.peerConnection.onconnectionstatechange = () => {
             console.log(`🔌 Connection state: ${this.peerConnection.connectionState}`);
@@ -1137,7 +1207,39 @@ async function startCallToAdmin() {
         console.error('Call setup failed:', error);
     }
 }
+// Add this test function
+async function testWebRTCSetup() {
+    console.log("🧪 Testing WebRTC setup...");
+    
+    try {
+        // Test media devices
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        console.log("📱 Available devices:", devices);
+        
+        // Test getUserMedia
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: true, 
+            video: true 
+        });
+        console.log("✅ getUserMedia works");
+        stream.getTracks().forEach(track => track.stop());
+        
+        // Test RTCPeerConnection
+        const pc = new RTCPeerConnection();
+        console.log("✅ RTCPeerConnection works");
+        pc.close();
+        
+        console.log("🎉 WebRTC setup looks good!");
+        return true;
+    } catch (error) {
+        console.error("❌ WebRTC test failed:", error);
+        alert(`WebRTC test failed: ${error.message}`);
+        return false;
+    }
+}
 
+// Call this in your admin initialization
+// testWebRTCSetup();
 async function testMediaPermissions() {
     try {
         const { hasCamera, hasMicrophone } = await CallManager.checkMediaDevices();
@@ -2372,6 +2474,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
