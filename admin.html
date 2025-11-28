@@ -823,11 +823,11 @@ input:focus, select:focus {
         <div class="call-video-container">
             <div class="call-video-box">
                 <h4>Your Video</h4>
-                <video id="local-video" autoplay muted></video>
+                <video id="local-video" autoplay muted playsinline></video>
             </div>
             <div class="call-video-box">
                 <h4>Customer Video</h4>
-                <video id="remote-video" autoplay></video>
+                <video id="remote-video" autoplay playsinline></video>
             </div>
         </div>
         <div style="text-align: center; margin-top: 20px;">
@@ -1070,3 +1070,4 @@ window.addEventListener('load', () => {
 </script> 
 </body> 
 </html>
+
