@@ -836,7 +836,7 @@ const CallManager = {
                 }
             });
         });
-    },
+    }
 
     // Send ICE candidate
     async sendIceCandidate(candidate) {
@@ -2187,4 +2187,5 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
