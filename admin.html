@@ -809,25 +809,6 @@ input:focus, select:focus {
  </main> 
 </div> 
 
-
-    <div id="call-options-modal" class="modal" style="display: none;">
-    <div class="modal-inner">
-        <h3>Call Options</h3>
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin: 10px 0;">
-                <input type="checkbox" id="option-video" checked> Enable Video
-            </label>
-            <label style="display: block; margin: 10px 0;">
-                <input type="checkbox" id="option-audio" checked> Enable Audio
-            </label>
-        </div>
-        <div style="display: flex; gap: 10px; justify-content: center;">
-            <button onclick="startCallWithOptions()" class="btn primary">Start Call</button>
-            <button onclick="cancelCallWithOptions()" class="btn ghost">Cancel</button>
-        </div>
-    </div>
-</div>
-    
 <!-- Incoming Call Notification -->
 <div id="incoming-call-box" class="incoming-call" style="display:none">
   <p>📞 Customer is calling...</p>
@@ -867,6 +848,25 @@ input:focus, select:focus {
             <button id="toggle-screen-share-btn" class="btn small" title="Share screen">🖥️</button>
             <button id="mute-remote-btn" class="btn small" title="Mute remote">🔊</button>
             <button onclick="endCall()" class="btn-logout small" title="End call">📞 End</button>
+        </div>
+    </div>
+</div>
+
+<!-- Call Options Modal -->
+<div id="call-options-modal" class="modal" style="display: none;">
+    <div class="modal-inner">
+        <h3>Call Options</h3>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin: 10px 0;">
+                <input type="checkbox" id="option-video" checked> Enable Video
+            </label>
+            <label style="display: block; margin: 10px 0;">
+                <input type="checkbox" id="option-audio" checked> Enable Audio
+            </label>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button onclick="startCallWithOptions()" class="btn primary">Start Call</button>
+            <button onclick="cancelCallWithOptions()" class="btn ghost">Cancel</button>
         </div>
     </div>
 </div>
@@ -989,7 +989,6 @@ function startCallToSelectedUser() {
         alert('Please select a customer to call first.');
         return;
     }
-    // Use the upgraded CallManager directly - it will show its own options modal
     startCallAsAdmin(currentAdminChatUser);
 }
 
@@ -1008,6 +1007,27 @@ function declineCall() {
         currentIncomingCallId = null;
     }
 }
+
+// Enhanced incoming call handler for admin
+function handleIncomingCall(callId, callData) {
+    currentIncomingCallId = callId;
+    
+    const incomingCallBox = document.getElementById('incoming-call-box');
+    if (incomingCallBox) {
+        const callerName = callData.callerId || callData.callerName || 'Customer';
+        incomingCallBox.innerHTML = `
+            <p>📞 Incoming call from ${callerName}</p>
+            <button onclick="answerCall()" class="btn primary">Answer</button>
+            <button onclick="declineCall()" class="btn ghost">Decline</button>
+        `;
+        incomingCallBox.style.display = 'block';
+    }
+}
+
+// Override the CallManager's handleIncomingCall for admin-specific UI
+CallManager.handleIncomingCall = function(callId, callData) {
+    handleIncomingCall(callId, callData);
+};
 
 // Update call UI when call starts/ends
 function updateCallUI(isInCall) {
@@ -1083,5 +1103,3 @@ window.addEventListener('load', () => {
 </script> 
 </body> 
 </html>
-
-
