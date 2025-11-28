@@ -50,6 +50,21 @@ const Firestore = {
     calls: () => db.collection('calls')
 };
 
+/* ---------- Application Initialization ---------- */
+window.addEventListener('load', () => {
+    setFooterYear();
+    bindAuthState();
+    initIndex();
+    initAdmin();
+    initChat();
+    initCustomerOrders();
+    
+    // Initialize call manager with delay to ensure everything is loaded
+    setTimeout(() => {
+        CallManager.init();
+    }, 1000);
+});
+
 /* ---------- Chat System Initialization ---------- */
 const TYPING_DEBOUNCE_MS = 1200;
 let typingTimer = null;
@@ -79,8 +94,6 @@ function initChat(){
             }
             // start watcher for new messages (for notifications and global badge)
             startGlobalNotificationWatcher();
-            // listen for incoming call requests (if admin)
-            listenForCallRequests();
         }
     });
 
@@ -105,16 +118,6 @@ function initChat(){
         }
     });
 }
-
-/* ---------- Application Initialization ---------- */
-window.addEventListener('load', () => {
-    setFooterYear();
-    bindAuthState();
-    initIndex();
-    initAdmin();
-    initChat(); // This will now work
-    initCustomerOrders();
-});
 
 /* ---------- WebRTC Call System (Simplified & Fixed) ---------- */
 const CallManager = {
@@ -649,6 +652,10 @@ function declineIncomingCall() {
     }
 }
 
+// ... (Rest of your existing code for chat, auth, products, cart, etc. remains the same)
+// [Include all your existing functions for chat, auth, products, cart, checkout, orders, admin here]
+// They were already working correctly based on your comment
+
 /* ---------- CUSTOMER-side chat ---------- */
 function startCustomerChat(userId, displayName = null) {
     if (customerChatUnsub) { 
@@ -737,7 +744,7 @@ function sendChat() {
     const message = input.value.trim();
     if (!message) return;
 
-    const user = firebase.auth().currentUser;
+    const user = auth.currentUser;
     if (!user) { alert('Please login to chat.'); return; }
 
     const chatDocRef = Firestore.chats().doc(user.uid);
@@ -769,7 +776,7 @@ function sendChat() {
 }
 
 function debounceCustomerTyping() {
-    const user = firebase.auth().currentUser;
+    const user = auth.currentUser;
     if (!user) return;
     const chatDocRef = Firestore.chats().doc(user.uid);
     chatDocRef.set({ typing: true }, { merge: true }).catch(()=>{});
@@ -1688,16 +1695,3 @@ function setFooterYear(){
     const f = DOM.q('footer'); 
     if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); 
 }
-
-/* ---------- End of script.js ---------- */
-
-
-
-
-
-
-
-
-
-
-
