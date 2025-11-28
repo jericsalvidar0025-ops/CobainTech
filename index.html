@@ -297,27 +297,27 @@
     <button onclick="declineCall()" class="btn ghost">Decline</button>
   </div>
 
-  <!-- Call Modal -->
-  <div id="call-modal" class="modal" style="display: none;">
+<!-- Call Modal -->
+<div id="call-modal" class="modal" style="display: none;">
     <div class="modal-inner">
-      <h3>Video Call with CobainTech Support</h3>
-      <div class="call-video-container">
-        <div class="call-video-box">
-          <h4>Your Video</h4>
-          <video id="local-video" autoplay muted></video>
+        <h3>Video Call with CobainTech Support</h3>
+        <div class="call-video-container">
+            <div class="call-video-box">
+                <h4>Your Video</h4>
+                <video id="local-video" autoplay muted playsinline></video>
+            </div>
+            <div class="call-video-box">
+                <h4>Support Video</h4>
+                <video id="remote-video" autoplay playsinline></video>
+            </div>
         </div>
-        <div class="call-video-box">
-          <h4>Support Video</h4>
-          <video id="remote-video" autoplay></video>
+        <div style="text-align: center; margin-top: 20px;">
+            <button onclick="endCall()" class="btn-logout" style="padding: 12px 24px; font-size: 1.1rem;">
+                📞 End Call
+            </button>
         </div>
-      </div>
-      <div style="text-align: center; margin-top: 20px;">
-        <button onclick="endCall()" class="btn-logout" style="padding: 12px 24px; font-size: 1.1rem;">
-          📞 End Call
-        </button>
-      </div>
     </div>
-  </div>
+</div>
 
   <!-- Cart panel -->
   <aside id="cart-panel" class="cart-panel" aria-hidden="true">
@@ -497,3 +497,4 @@
   </script>
 </body>
 </html>
+
