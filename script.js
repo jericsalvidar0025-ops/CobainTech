@@ -2128,5 +2128,3 @@ function setFooterYear(){
 /* ---------- End of script.js ---------- */
 
 
-
-just one problem, initchat is not defined
