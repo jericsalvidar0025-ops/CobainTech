@@ -119,7 +119,7 @@ function initChat(){
     });
 }
 
-/* ---------- WebRTC Call System (Simplified & Fixed) ---------- */
+/* ---------- WebRTC Call System (Fixed Stream Handling) ---------- */
 const CallManager = {
     config: { 
         iceServers: [
@@ -132,75 +132,36 @@ const CallManager = {
     peerConnection: null,
     currentCallId: null,
     isCaller: false,
-    ringtoneAudio: null,
-    isVideoEnabled: true,
-    isAudioEnabled: true,
-    callStartTime: null,
-    callTimerInterval: null,
 
     // Initialize call system
     init() {
         console.log("📞 CallManager initialized");
-        this.setupRingtone();
         this.listenForIncomingCalls();
     },
 
-    // Setup ringtone audio
-    setupRingtone() {
-        this.ringtoneAudio = new Audio();
-        this.ringtoneAudio.loop = true;
-        // Simple beep ringtone
-        this.ringtoneAudio.src = "data:audio/wav;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAABAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////8AAABhTEFNRTMuMTAwBKkAAAAAAAAAADUgJAOBQQAARAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQxAADwAABpAAAAlAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
-    },
-
-    // Play ringtone
-    playRingtone() {
-        try {
-            if (this.ringtoneAudio) {
-                this.ringtoneAudio.currentTime = 0;
-                this.ringtoneAudio.play().catch(e => {
-                    console.log("❌ Ringtone play failed:", e);
-                });
-            }
-        } catch (error) {
-            console.log("❌ Ringtone error:", error);
-        }
-    },
-
-    // Stop ringtone
-    stopRingtone() {
-        try {
-            if (this.ringtoneAudio) {
-                this.ringtoneAudio.pause();
-                this.ringtoneAudio.currentTime = 0;
-            }
-        } catch (error) {
-            console.log("❌ Stop ringtone error:", error);
-        }
-    },
-
     // Media Management
-    async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
+    async prepareLocalMedia() {
         try {
             console.log("🎥 Preparing local media...");
-            
-            const constraints = {
-                audio: audioEnabled,
-                video: videoEnabled
-            };
-
-            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.localStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }, 
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                }
+            });
             
             const localEl = document.getElementById('local-video');
             if (localEl) {
                 localEl.srcObject = this.localStream;
-                localEl.muted = true;
+                localEl.muted = true; // Mute local video to avoid echo
                 console.log("✅ Local media ready");
             }
-
-            this.isVideoEnabled = videoEnabled;
-            this.isAudioEnabled = audioEnabled;
-
         } catch (err) {
             console.error('❌ Media access failed:', err);
             alert('Unable to access camera/microphone. Please check permissions.');
@@ -218,27 +179,45 @@ const CallManager = {
         const remoteEl = document.getElementById('remote-video');
         if (remoteEl) {
             remoteEl.srcObject = this.remoteStream;
+            remoteEl.muted = false; // Ensure remote video is not muted
         }
 
         // Add local tracks to connection
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => {
+                console.log("🎯 Adding local track:", track.kind);
                 this.peerConnection.addTrack(track, this.localStream);
             });
         }
 
-        // Handle incoming tracks
+        // Handle incoming tracks - FIXED VERSION
         this.peerConnection.ontrack = (event) => {
             console.log("📹 Remote track received:", event.track.kind);
-            event.streams[0].getTracks().forEach(track => {
-                this.remoteStream.addTrack(track);
-            });
+            if (event.streams && event.streams[0]) {
+                // Use the stream from the event directly
+                const remoteEl = document.getElementById('remote-video');
+                if (remoteEl) {
+                    remoteEl.srcObject = event.streams[0];
+                    console.log("✅ Remote stream attached to video element");
+                }
+            } else if (event.track) {
+                // Fallback: add track to our remote stream
+                this.remoteStream.addTrack(event.track);
+                const remoteEl = document.getElementById('remote-video');
+                if (remoteEl) {
+                    remoteEl.srcObject = this.remoteStream;
+                    console.log("✅ Remote track added to stream");
+                }
+            }
         };
 
         // Handle ICE candidates
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
+                console.log("❄️ ICE candidate generated");
                 this.sendIceCandidate(event.candidate);
+            } else {
+                console.log("✅ All ICE candidates gathered");
             }
         };
 
@@ -247,18 +226,23 @@ const CallManager = {
             console.log(`🔌 Connection state: ${this.peerConnection.connectionState}`);
             if (this.peerConnection.connectionState === 'connected') {
                 console.log("✅ Call connected!");
-                this.stopRingtone();
-                this.startCallTimer();
+                this.showCallConnected();
             } else if (this.peerConnection.connectionState === 'failed') {
                 console.error("❌ Call connection failed");
+                alert("Call connection failed. Please try again.");
                 this.hangupCall();
             }
+        };
+
+        // Handle ICE connection state
+        this.peerConnection.oniceconnectionstatechange = () => {
+            console.log(`🧊 ICE connection state: ${this.peerConnection.iceConnectionState}`);
         };
     },
 
     // Start call as customer
-    async startCallAsCustomer(videoEnabled = true, audioEnabled = true) {
-        const user = auth.currentUser;
+    async startCallAsCustomer() {
+        const user = firebase.auth().currentUser;
         if (!user) {
             alert('Please login to start a call');
             return;
@@ -268,36 +252,47 @@ const CallManager = {
             console.log("📞 Starting call as customer...");
             this.isCaller = true;
             
-            await this.prepareLocalMedia(videoEnabled, audioEnabled);
+            // Prepare media first
+            await this.prepareLocalMedia();
             await this.createPeerConnection();
 
+            // Create call document
             const callRef = Firestore.calls().doc();
             this.currentCallId = callRef.id;
 
             await callRef.set({
                 callerId: user.uid,
-                calleeId: "admin", // Default admin ID
+                calleeId: "JIDFGUZI2qTo8nexGBjiOWM4sIy1", // Admin ID
                 state: 'requested',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            const offer = await this.peerConnection.createOffer();
+            // Create offer with better options
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const offer = await this.peerConnection.createOffer(offerOptions);
             await this.peerConnection.setLocalDescription(offer);
 
             await callRef.update({
                 offer: {
                     type: offer.type,
                     sdp: offer.sdp
-                }
+                },
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
             console.log("✅ Call offer sent");
-            
-            this.playRingtone();
+
+            // Listen for answer
             this.listenForAnswer(callRef);
+            // Listen for ICE candidates
             this.listenForIceCandidates(callRef, 'answerCandidates');
 
             this.showCallUI();
+            alert('Calling admin...');
 
         } catch (error) {
             console.error('❌ Call failed:', error);
@@ -307,8 +302,8 @@ const CallManager = {
     },
 
     // Start call as admin
-    async startCallAsAdmin(userId, videoEnabled = true, audioEnabled = true) {
-        const user = auth.currentUser;
+    async startCallAsAdmin(userId) {
+        const user = firebase.auth().currentUser;
         if (!user) {
             alert('Please login as admin');
             return;
@@ -318,7 +313,7 @@ const CallManager = {
             console.log("📞 Starting call as admin to:", userId);
             this.isCaller = true;
             
-            await this.prepareLocalMedia(videoEnabled, audioEnabled);
+            await this.prepareLocalMedia();
             await this.createPeerConnection();
 
             const callRef = Firestore.calls().doc();
@@ -331,23 +326,29 @@ const CallManager = {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            const offer = await this.peerConnection.createOffer();
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const offer = await this.peerConnection.createOffer(offerOptions);
             await this.peerConnection.setLocalDescription(offer);
 
             await callRef.update({
                 offer: {
                     type: offer.type,
                     sdp: offer.sdp
-                }
+                },
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
             console.log("✅ Call offer sent to customer");
-            
-            this.playRingtone();
+
             this.listenForAnswer(callRef);
             this.listenForIceCandidates(callRef, 'answerCandidates');
 
             this.showCallUI();
+            alert('Calling customer...');
 
         } catch (error) {
             console.error('❌ Admin call failed:', error);
@@ -357,19 +358,18 @@ const CallManager = {
     },
 
     // Answer incoming call
-    async answerCall(callId, videoEnabled = true, audioEnabled = true) {
+    async answerCall(callId) {
         try {
             console.log("📞 Answering call:", callId);
             this.isCaller = false;
             this.currentCallId = callId;
 
-            this.stopRingtone();
-
             const callRef = Firestore.calls().doc(callId);
             
-            await this.prepareLocalMedia(videoEnabled, audioEnabled);
+            await this.prepareLocalMedia();
             await this.createPeerConnection();
 
+            // Get the offer
             const callDoc = await callRef.get();
             const callData = callDoc.data();
 
@@ -377,11 +377,18 @@ const CallManager = {
                 throw new Error('No offer found in call document');
             }
 
+            // Set remote description FIRST
             await this.peerConnection.setRemoteDescription(
                 new RTCSessionDescription(callData.offer)
             );
 
-            const answer = await this.peerConnection.createAnswer();
+            // Create answer with options
+            const answerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const answer = await this.peerConnection.createAnswer(answerOptions);
             await this.peerConnection.setLocalDescription(answer);
 
             await callRef.update({
@@ -389,11 +396,13 @@ const CallManager = {
                     type: answer.type,
                     sdp: answer.sdp
                 },
-                state: 'accepted'
+                state: 'accepted',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
             console.log("✅ Call answered");
 
+            // Listen for ICE candidates
             this.listenForIceCandidates(callRef, 'offerCandidates');
 
             this.showCallUI();
@@ -417,7 +426,6 @@ const CallManager = {
                     const answer = new RTCSessionDescription(data.answer);
                     await this.peerConnection.setRemoteDescription(answer);
                     console.log("✅ Remote description set from answer");
-                    this.stopRingtone();
                 } catch (error) {
                     console.error('❌ Error setting remote description:', error);
                 }
@@ -438,6 +446,7 @@ const CallManager = {
                     try {
                         const candidate = new RTCIceCandidate(change.doc.data());
                         await this.peerConnection.addIceCandidate(candidate);
+                        console.log("❄️ ICE candidate added:", candidateType);
                     } catch (error) {
                         console.error('❌ Error adding ICE candidate:', error);
                     }
@@ -456,47 +465,32 @@ const CallManager = {
             
             const collectionName = this.isCaller ? 'offerCandidates' : 'answerCandidates';
             await callRef.collection(collectionName).add(candidateData);
+            console.log("❄️ ICE candidate sent to", collectionName);
         } catch (error) {
             console.error('❌ Error sending ICE candidate:', error);
         }
     },
 
-    // Start call timer
-    startCallTimer() {
-        this.callStartTime = new Date();
-        this.callTimerInterval = setInterval(() => {
-            this.updateCallTimer();
-        }, 1000);
-    },
-
-    // Update call timer display
-    updateCallTimer() {
-        if (!this.callStartTime) return;
-
-        const durationEl = document.getElementById('call-duration');
-        if (durationEl) {
-            const now = new Date();
-            const diff = Math.floor((now - this.callStartTime) / 1000);
-            const minutes = Math.floor(diff / 60);
-            const seconds = diff % 60;
-            durationEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    // Show call connected state
+    showCallConnected() {
+        const modal = document.getElementById('call-modal');
+        if (modal) {
+            const title = modal.querySelector('h3');
+            if (title) {
+                title.textContent += ' (Connected)';
+            }
         }
-    },
-
-    // Stop call timer
-    stopCallTimer() {
-        if (this.callTimerInterval) {
-            clearInterval(this.callTimerInterval);
-            this.callTimerInterval = null;
+        
+        // Play remote video if it's paused
+        const remoteVideo = document.getElementById('remote-video');
+        if (remoteVideo && remoteVideo.paused) {
+            remoteVideo.play().catch(console.error);
         }
-        this.callStartTime = null;
     },
 
     // Hang up call
     async hangupCall() {
         console.log("📞 Hanging up call...");
-        this.stopRingtone();
-        this.stopCallTimer();
         this.cleanup();
     },
 
@@ -509,12 +503,18 @@ const CallManager = {
             }
 
             if (this.localStream) {
-                this.localStream.getTracks().forEach(track => track.stop());
+                this.localStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("🛑 Stopped local track:", track.kind);
+                });
                 this.localStream = null;
             }
 
             if (this.remoteStream) {
-                this.remoteStream.getTracks().forEach(track => track.stop());
+                this.remoteStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("🛑 Stopped remote track:", track.kind);
+                });
                 this.remoteStream = null;
             }
 
@@ -536,7 +536,7 @@ const CallManager = {
 
     // Listen for incoming calls
     listenForIncomingCalls() {
-        const user = auth.currentUser;
+        const user = firebase.auth().currentUser;
         if (!user) return;
 
         console.log("👂 Listening for incoming calls...");
@@ -558,38 +558,40 @@ const CallManager = {
     handleIncomingCall(callId, callData) {
         console.log("📞 Handling incoming call:", callId);
         
-        // Store for later use
+        // Store the call ID globally for the answer/decline functions
         window.currentIncomingCallId = callId;
         
-        this.playRingtone();
-        this.showIncomingCallNotification();
-    },
-
-    // Show incoming call notification
-    showIncomingCallNotification() {
-        const incomingCallBox = document.getElementById('incoming-call-box');
-        if (incomingCallBox) {
-            incomingCallBox.innerHTML = `
-                <p>📞 Incoming call</p>
-                <div style="display: flex; gap: 10px; justify-content: center;">
+        const callerName = callData.callerName || 'Customer';
+        const isAdmin = document.getElementById('admin-orders'); // Check if we're in admin panel
+        
+        if (isAdmin) {
+            // Admin interface
+            if (confirm(`Incoming call from ${callerName}. Accept?`)) {
+                this.answerCall(callId);
+            } else {
+                this.declineCall(callId);
+            }
+        } else {
+            // Customer interface - show notification
+            const incomingCallBox = document.getElementById('incoming-call-box');
+            if (incomingCallBox) {
+                incomingCallBox.innerHTML = `
+                    <p>📞 Incoming call from CobainTech Support</p>
                     <button onclick="answerIncomingCall()" class="btn primary">Answer</button>
                     <button onclick="declineIncomingCall()" class="btn ghost">Decline</button>
-                </div>
-            `;
-            incomingCallBox.style.display = 'block';
+                `;
+                incomingCallBox.style.display = 'block';
+            }
         }
     },
 
     // Decline call
     async declineCall(callId) {
-        this.stopRingtone();
         await Firestore.calls().doc(callId).update({
-            state: 'declined'
+            state: 'declined',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         console.log("📞 Call declined");
-        
-        const incomingCallBox = document.getElementById('incoming-call-box');
-        if (incomingCallBox) incomingCallBox.style.display = 'none';
     },
 
     // UI Management
@@ -597,7 +599,11 @@ const CallManager = {
         const modal = document.getElementById('call-modal');
         if (modal) {
             modal.style.display = 'flex';
+            console.log("✅ Call UI shown");
         }
+        
+        // Update call buttons
+        this.updateCallButtons(true);
     },
 
     hideCallUI() {
@@ -611,17 +617,36 @@ const CallManager = {
         
         if (remoteVideo) {
             remoteVideo.srcObject = null;
+            remoteVideo.load(); // Reset video element
         }
         if (localVideo) {
             localVideo.srcObject = null;
+            localVideo.load(); // Reset video element
         }
         
-        const incomingCallBox = document.getElementById('incoming-call-box');
-        if (incomingCallBox) incomingCallBox.style.display = 'none';
+        // Update call buttons
+        this.updateCallButtons(false);
+        
+        console.log("✅ Call UI hidden");
+    },
+
+    updateCallButtons(isInCall) {
+        const callBtn = document.getElementById('btn-call');
+        const hangupBtn = document.getElementById('btn-hangup');
+        
+        if (callBtn) callBtn.style.display = isInCall ? 'none' : 'block';
+        if (hangupBtn) hangupBtn.style.display = isInCall ? 'block' : 'none';
     }
 };
 
-/* ---------- Public Call Functions ---------- */
+// Initialize call manager when page loads
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        CallManager.init();
+    }, 1000);
+});
+
+/* ---------- Simplified Public Call Functions ---------- */
 function startCallToAdmin() {
     CallManager.startCallAsCustomer();
 }
@@ -641,6 +666,8 @@ function endCall() {
 function answerIncomingCall() {
     if (window.currentIncomingCallId) {
         CallManager.answerCall(window.currentIncomingCallId);
+        const incomingCallBox = document.getElementById('incoming-call-box');
+        if (incomingCallBox) incomingCallBox.style.display = 'none';
         window.currentIncomingCallId = null;
     }
 }
@@ -648,14 +675,16 @@ function answerIncomingCall() {
 function declineIncomingCall() {
     if (window.currentIncomingCallId) {
         CallManager.declineCall(window.currentIncomingCallId);
+        const incomingCallBox = document.getElementById('incoming-call-box');
+        if (incomingCallBox) incomingCallBox.style.display = 'none';
         window.currentIncomingCallId = null;
     }
 }
 
-// ... (Rest of your existing code for chat, auth, products, cart, etc. remains the same)
-// [Include all your existing functions for chat, auth, products, cart, checkout, orders, admin here]
-// They were already working correctly based on your comment
-
+function listenForCallRequests() {
+    // This is now handled automatically by CallManager.init()
+    console.log("📞 Call listener activated");
+}
 /* ---------- CUSTOMER-side chat ---------- */
 function startCustomerChat(userId, displayName = null) {
     if (customerChatUnsub) { 
@@ -1695,3 +1724,4 @@ function setFooterYear(){
     const f = DOM.q('footer'); 
     if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); 
 }
+
