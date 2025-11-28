@@ -938,33 +938,34 @@ async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
         }
     },
 
-    // Listen for answer
-    listenForAnswer(callRef) {
-        callRef.onSnapshot(async (snapshot) => {
-            const data = snapshot.data();
-            if (!data) return;
+// Listen for answer
+listenForAnswer(callRef) {
+    callRef.onSnapshot(async (snapshot) => {
+        const data = snapshot.data();
+        if (!data) return;
 
-            if (data.answer && !this.peerConnection.currentRemoteDescription) {
-                console.log("✅ Answer received");
-                try {
-                    const answer = new RTCSessionDescription(data.answer);
-                    await this.peerConnection.setRemoteDescription(answer);
-                    console.log("✅ Remote description set from answer");
-                    this.stopRingtone();
-                    this.hideCallOptionsModal();
-                } catch (error) {
-                    console.error('❌ Error setting remote description:', error);
-                }
-            }
-
-            if (data.state === 'ended') {
-                console.log("📞 Call ended by remote party");
+        // CRITICAL: Check if peerConnection exists before using it
+        if (data.answer && this.peerConnection && !this.peerConnection.currentRemoteDescription) {
+            console.log("✅ Answer received");
+            try {
+                const answer = new RTCSessionDescription(data.answer);
+                await this.peerConnection.setRemoteDescription(answer);
+                console.log("✅ Remote description set from answer");
                 this.stopRingtone();
-                this.hangupCall();
+                this.hideCallOptionsModal();
+            } catch (error) {
+                console.error('❌ Error setting remote description:', error);
             }
-        });
-    },
+        }
 
+        // Also check if peerConnection exists here
+        if (data.state === 'ended' && this.peerConnection) {
+            console.log("📞 Call ended by remote party");
+            this.stopRingtone();
+            this.hangupCall();
+        }
+    });
+}
     // Listen for ICE candidates
     listenForIceCandidates(callRef, candidateType) {
         callRef.collection(candidateType).onSnapshot((snapshot) => {
@@ -2474,6 +2475,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
