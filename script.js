@@ -61,7 +61,7 @@ window.addEventListener('load', () => {
 });
 
 
-/* ---------- WebRTC Call System (Fixed Version) ---------- */
+/* ---------- WebRTC Call System (Fixed Stream Handling) ---------- */
 const CallManager = {
     config: { 
         iceServers: [
@@ -86,12 +86,22 @@ const CallManager = {
         try {
             console.log("🎥 Preparing local media...");
             this.localStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: true, 
-                video: true 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }, 
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                }
             });
+            
             const localEl = document.getElementById('local-video');
             if (localEl) {
                 localEl.srcObject = this.localStream;
+                localEl.muted = true; // Mute local video to avoid echo
                 console.log("✅ Local media ready");
             }
         } catch (err) {
@@ -111,21 +121,36 @@ const CallManager = {
         const remoteEl = document.getElementById('remote-video');
         if (remoteEl) {
             remoteEl.srcObject = this.remoteStream;
+            remoteEl.muted = false; // Ensure remote video is not muted
         }
 
-        // Add local tracks
+        // Add local tracks to connection
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => {
+                console.log("🎯 Adding local track:", track.kind);
                 this.peerConnection.addTrack(track, this.localStream);
             });
         }
 
-        // Handle incoming tracks
+        // Handle incoming tracks - FIXED VERSION
         this.peerConnection.ontrack = (event) => {
-            console.log("📹 Remote track received");
-            event.streams[0].getTracks().forEach(track => {
-                this.remoteStream.addTrack(track);
-            });
+            console.log("📹 Remote track received:", event.track.kind);
+            if (event.streams && event.streams[0]) {
+                // Use the stream from the event directly
+                const remoteEl = document.getElementById('remote-video');
+                if (remoteEl) {
+                    remoteEl.srcObject = event.streams[0];
+                    console.log("✅ Remote stream attached to video element");
+                }
+            } else if (event.track) {
+                // Fallback: add track to our remote stream
+                this.remoteStream.addTrack(event.track);
+                const remoteEl = document.getElementById('remote-video');
+                if (remoteEl) {
+                    remoteEl.srcObject = this.remoteStream;
+                    console.log("✅ Remote track added to stream");
+                }
+            }
         };
 
         // Handle ICE candidates
@@ -133,6 +158,8 @@ const CallManager = {
             if (event.candidate) {
                 console.log("❄️ ICE candidate generated");
                 this.sendIceCandidate(event.candidate);
+            } else {
+                console.log("✅ All ICE candidates gathered");
             }
         };
 
@@ -141,7 +168,17 @@ const CallManager = {
             console.log(`🔌 Connection state: ${this.peerConnection.connectionState}`);
             if (this.peerConnection.connectionState === 'connected') {
                 console.log("✅ Call connected!");
+                this.showCallConnected();
+            } else if (this.peerConnection.connectionState === 'failed') {
+                console.error("❌ Call connection failed");
+                alert("Call connection failed. Please try again.");
+                this.hangupCall();
             }
+        };
+
+        // Handle ICE connection state
+        this.peerConnection.oniceconnectionstatechange = () => {
+            console.log(`🧊 ICE connection state: ${this.peerConnection.iceConnectionState}`);
         };
     },
 
@@ -157,7 +194,7 @@ const CallManager = {
             console.log("📞 Starting call as customer...");
             this.isCaller = true;
             
-            // Prepare media
+            // Prepare media first
             await this.prepareLocalMedia();
             await this.createPeerConnection();
 
@@ -172,8 +209,13 @@ const CallManager = {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            // Create offer
-            const offer = await this.peerConnection.createOffer();
+            // Create offer with better options
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const offer = await this.peerConnection.createOffer(offerOptions);
             await this.peerConnection.setLocalDescription(offer);
 
             await callRef.update({
@@ -197,6 +239,7 @@ const CallManager = {
         } catch (error) {
             console.error('❌ Call failed:', error);
             alert('Call failed: ' + error.message);
+            this.cleanup();
         }
     },
 
@@ -225,7 +268,12 @@ const CallManager = {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            const offer = await this.peerConnection.createOffer();
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const offer = await this.peerConnection.createOffer(offerOptions);
             await this.peerConnection.setLocalDescription(offer);
 
             await callRef.update({
@@ -247,6 +295,7 @@ const CallManager = {
         } catch (error) {
             console.error('❌ Admin call failed:', error);
             alert('Call failed: ' + error.message);
+            this.cleanup();
         }
     },
 
@@ -270,12 +319,18 @@ const CallManager = {
                 throw new Error('No offer found in call document');
             }
 
+            // Set remote description FIRST
             await this.peerConnection.setRemoteDescription(
                 new RTCSessionDescription(callData.offer)
             );
 
-            // Create answer
-            const answer = await this.peerConnection.createAnswer();
+            // Create answer with options
+            const answerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const answer = await this.peerConnection.createAnswer(answerOptions);
             await this.peerConnection.setLocalDescription(answer);
 
             await callRef.update({
@@ -297,6 +352,7 @@ const CallManager = {
         } catch (error) {
             console.error('❌ Answer call failed:', error);
             alert('Failed to answer call: ' + error.message);
+            this.cleanup();
         }
     },
 
@@ -308,8 +364,13 @@ const CallManager = {
 
             if (data.answer && !this.peerConnection.currentRemoteDescription) {
                 console.log("✅ Answer received");
-                const answer = new RTCSessionDescription(data.answer);
-                await this.peerConnection.setRemoteDescription(answer);
+                try {
+                    const answer = new RTCSessionDescription(data.answer);
+                    await this.peerConnection.setRemoteDescription(answer);
+                    console.log("✅ Remote description set from answer");
+                } catch (error) {
+                    console.error('❌ Error setting remote description:', error);
+                }
             }
 
             if (data.state === 'ended') {
@@ -324,9 +385,13 @@ const CallManager = {
         callRef.collection(candidateType).onSnapshot((snapshot) => {
             snapshot.docChanges().forEach(async (change) => {
                 if (change.type === 'added') {
-                    const candidate = new RTCIceCandidate(change.doc.data());
-                    await this.peerConnection.addIceCandidate(candidate);
-                    console.log("❄️ ICE candidate added:", candidateType);
+                    try {
+                        const candidate = new RTCIceCandidate(change.doc.data());
+                        await this.peerConnection.addIceCandidate(candidate);
+                        console.log("❄️ ICE candidate added:", candidateType);
+                    } catch (error) {
+                        console.error('❌ Error adding ICE candidate:', error);
+                    }
                 }
             });
         });
@@ -336,17 +401,43 @@ const CallManager = {
     async sendIceCandidate(candidate) {
         if (!this.currentCallId) return;
 
-        const callRef = Firestore.calls().doc(this.currentCallId);
-        const candidateData = candidate.toJSON();
+        try {
+            const callRef = Firestore.calls().doc(this.currentCallId);
+            const candidateData = candidate.toJSON();
+            
+            const collectionName = this.isCaller ? 'offerCandidates' : 'answerCandidates';
+            await callRef.collection(collectionName).add(candidateData);
+            console.log("❄️ ICE candidate sent to", collectionName);
+        } catch (error) {
+            console.error('❌ Error sending ICE candidate:', error);
+        }
+    },
+
+    // Show call connected state
+    showCallConnected() {
+        const modal = document.getElementById('call-modal');
+        if (modal) {
+            const title = modal.querySelector('h3');
+            if (title) {
+                title.textContent += ' (Connected)';
+            }
+        }
         
-        const collectionName = this.isCaller ? 'offerCandidates' : 'answerCandidates';
-        await callRef.collection(collectionName).add(candidateData);
+        // Play remote video if it's paused
+        const remoteVideo = document.getElementById('remote-video');
+        if (remoteVideo && remoteVideo.paused) {
+            remoteVideo.play().catch(console.error);
+        }
     },
 
     // Hang up call
     async hangupCall() {
         console.log("📞 Hanging up call...");
-        
+        this.cleanup();
+    },
+
+    // Cleanup resources
+    cleanup() {
         try {
             if (this.peerConnection) {
                 this.peerConnection.close();
@@ -354,28 +445,34 @@ const CallManager = {
             }
 
             if (this.localStream) {
-                this.localStream.getTracks().forEach(track => track.stop());
+                this.localStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("🛑 Stopped local track:", track.kind);
+                });
                 this.localStream = null;
             }
 
             if (this.remoteStream) {
-                this.remoteStream.getTracks().forEach(track => track.stop());
+                this.remoteStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("🛑 Stopped remote track:", track.kind);
+                });
                 this.remoteStream = null;
             }
 
             if (this.currentCallId) {
-                await Firestore.calls().doc(this.currentCallId).update({
+                Firestore.calls().doc(this.currentCallId).update({
                     state: 'ended',
                     endedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                }).catch(console.error);
                 this.currentCallId = null;
             }
 
             this.hideCallUI();
-            console.log("✅ Call ended");
+            console.log("✅ Call cleanup completed");
 
         } catch (error) {
-            console.error('❌ Error hanging up:', error);
+            console.error('❌ Error during cleanup:', error);
         }
     },
 
@@ -460,8 +557,14 @@ const CallManager = {
         const remoteVideo = document.getElementById('remote-video');
         const localVideo = document.getElementById('local-video');
         
-        if (remoteVideo) remoteVideo.srcObject = null;
-        if (localVideo) localVideo.srcObject = null;
+        if (remoteVideo) {
+            remoteVideo.srcObject = null;
+            remoteVideo.load(); // Reset video element
+        }
+        if (localVideo) {
+            localVideo.srcObject = null;
+            localVideo.load(); // Reset video element
+        }
         
         // Update call buttons
         this.updateCallButtons(false);
@@ -1622,6 +1725,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
