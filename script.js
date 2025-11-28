@@ -60,177 +60,383 @@ window.addEventListener('load', () => {
     initCustomerOrders();
 });
 
-/* ---------- WebRTC Call System ---------- */
+/* ---------- WebRTC Call System (Fixed Stream Handling) ---------- */
 const CallManager = {
-    config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+    config: { 
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ] 
+    },
     localStream: null,
     remoteStream: null,
     peerConnection: null,
     currentCallId: null,
-    TYPING_DEBOUNCE_MS: 1200,
-    typingTimer: null,
+    isCaller: false,
+
+    // Initialize call system
+    init() {
+        console.log("📞 CallManager initialized");
+        this.listenForIncomingCalls();
+    },
 
     // Media Management
     async prepareLocalMedia() {
-        if (this.localStream) return;
-        
         try {
+            console.log("🎥 Preparing local media...");
             this.localStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: true, 
-                video: true 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }, 
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                }
             });
-            const localEl = DOM.q('#local-video');
-            if (localEl) localEl.srcObject = this.localStream;
+            
+            const localEl = document.getElementById('local-video');
+            if (localEl) {
+                localEl.srcObject = this.localStream;
+                localEl.muted = true; // Mute local video to avoid echo
+                console.log("✅ Local media ready");
+            }
         } catch (err) {
-            alert('Unable to access camera/microphone: ' + (err.message || err));
+            console.error('❌ Media access failed:', err);
+            alert('Unable to access camera/microphone. Please check permissions.');
             throw err;
         }
     },
 
-    // Peer Connection Management
-    async createPeerConnection(callRef) {
+    // Create peer connection
+    async createPeerConnection() {
+        console.log("🔗 Creating peer connection...");
         this.peerConnection = new RTCPeerConnection(this.config);
-        this.remoteStream = new MediaStream();
         
-        const remoteEl = DOM.q('#remote-video');
-        if (remoteEl) remoteEl.srcObject = this.remoteStream;
-
-        // Add local tracks
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => 
-                this.peerConnection.addTrack(track, this.localStream)
-            );
+        // Create remote stream
+        this.remoteStream = new MediaStream();
+        const remoteEl = document.getElementById('remote-video');
+        if (remoteEl) {
+            remoteEl.srcObject = this.remoteStream;
+            remoteEl.muted = false; // Ensure remote video is not muted
         }
 
-        // Handle incoming tracks
+        // Add local tracks to connection
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => {
+                console.log("🎯 Adding local track:", track.kind);
+                this.peerConnection.addTrack(track, this.localStream);
+            });
+        }
+
+        // Handle incoming tracks - FIXED VERSION
         this.peerConnection.ontrack = (event) => {
-            event.streams[0].getTracks().forEach(track => 
-                this.remoteStream.addTrack(track)
-            );
+            console.log("📹 Remote track received:", event.track.kind);
+            if (event.streams && event.streams[0]) {
+                // Use the stream from the event directly
+                const remoteEl = document.getElementById('remote-video');
+                if (remoteEl) {
+                    remoteEl.srcObject = event.streams[0];
+                    console.log("✅ Remote stream attached to video element");
+                }
+            } else if (event.track) {
+                // Fallback: add track to our remote stream
+                this.remoteStream.addTrack(event.track);
+                const remoteEl = document.getElementById('remote-video');
+                if (remoteEl) {
+                    remoteEl.srcObject = this.remoteStream;
+                    console.log("✅ Remote track added to stream");
+                }
+            }
         };
 
         // Handle ICE candidates
         this.peerConnection.onicecandidate = (event) => {
-            if (!event.candidate) return;
-            
-            callRef.get().then(doc => {
-                const data = doc.data() || {};
-                const candidateCollection = !data.offer ? 'offerCandidates' : 'answerCandidates';
-                callRef.collection(candidateCollection).add(event.candidate.toJSON());
-            });
+            if (event.candidate) {
+                console.log("❄️ ICE candidate generated");
+                this.sendIceCandidate(event.candidate);
+            } else {
+                console.log("✅ All ICE candidates gathered");
+            }
+        };
+
+        // Handle connection state
+        this.peerConnection.onconnectionstatechange = () => {
+            console.log(`🔌 Connection state: ${this.peerConnection.connectionState}`);
+            if (this.peerConnection.connectionState === 'connected') {
+                console.log("✅ Call connected!");
+                this.showCallConnected();
+            } else if (this.peerConnection.connectionState === 'failed') {
+                console.error("❌ Call connection failed");
+                alert("Call connection failed. Please try again.");
+                this.hangupCall();
+            }
+        };
+
+        // Handle ICE connection state
+        this.peerConnection.oniceconnectionstatechange = () => {
+            console.log(`🧊 ICE connection state: ${this.peerConnection.iceConnectionState}`);
         };
     },
 
-    // Call Initiation
-    async startCall(calleeId) {
+    // Start call as customer
+    async startCallAsCustomer() {
         const user = firebase.auth().currentUser;
         if (!user) {
-            alert("Please login first to call CobainTech Support.");
+            alert('Please login to start a call');
             return;
         }
 
-        const callRef = Firestore.calls().doc();
-        this.currentCallId = callRef.id;
+        try {
+            console.log("📞 Starting call as customer...");
+            this.isCaller = true;
+            
+            // Prepare media first
+            await this.prepareLocalMedia();
+            await this.createPeerConnection();
 
-        await callRef.set({
-            callerId: user.uid,
-            calleeId,
-            state: 'requested',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+            // Create call document
+            const callRef = Firestore.calls().doc();
+            this.currentCallId = callRef.id;
 
-        await this.prepareLocalMedia();
-        await this.createPeerConnection(callRef);
+            await callRef.set({
+                callerId: user.uid,
+                calleeId: "JIDFGUZI2qTo8nexGBjiOWM4sIy1", // Admin ID
+                state: 'requested',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
 
-        // Create and set local offer
-        const offer = await this.peerConnection.createOffer();
-        await this.peerConnection.setLocalDescription(offer);
-        
-        await callRef.set({
-            offer: { type: offer.type, sdp: offer.sdp },
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+            // Create offer with better options
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const offer = await this.peerConnection.createOffer(offerOptions);
+            await this.peerConnection.setLocalDescription(offer);
 
-        this.setupCallListeners(callRef);
-        this.showCallUI();
-        alert('Calling admin...');
+            await callRef.update({
+                offer: {
+                    type: offer.type,
+                    sdp: offer.sdp
+                },
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            console.log("✅ Call offer sent");
+
+            // Listen for answer
+            this.listenForAnswer(callRef);
+            // Listen for ICE candidates
+            this.listenForIceCandidates(callRef, 'answerCandidates');
+
+            this.showCallUI();
+            alert('Calling admin...');
+
+        } catch (error) {
+            console.error('❌ Call failed:', error);
+            alert('Call failed: ' + error.message);
+            this.cleanup();
+        }
     },
 
-    // Call Answering
-    async answerCall(callId) {
-        const callRef = Firestore.calls().doc(callId);
-        this.currentCallId = callId;
-
-        await this.prepareLocalMedia();
-        await this.createPeerConnection(callRef);
-
-        const callDoc = await callRef.get();
-        const data = callDoc.data();
-
-        // Update call state and set remote description
-        await callRef.update({ 
-            state: 'accepted', 
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
-        });
-
-        if (data.offer) {
-            const offer = new RTCSessionDescription(data.offer);
-            await this.peerConnection.setRemoteDescription(offer);
+    // Start call as admin
+    async startCallAsAdmin(userId) {
+        const user = firebase.auth().currentUser;
+        if (!user) {
+            alert('Please login as admin');
+            return;
         }
 
-        // Create and set local answer
-        const answer = await this.peerConnection.createAnswer();
-        await this.peerConnection.setLocalDescription(answer);
-        
-        await callRef.update({ 
-            answer: { type: answer.type, sdp: answer.sdp },
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
-        });
+        try {
+            console.log("📞 Starting call as admin to:", userId);
+            this.isCaller = true;
+            
+            await this.prepareLocalMedia();
+            await this.createPeerConnection();
 
-        this.setupAnswerListeners(callRef);
-        this.showCallUI();
+            const callRef = Firestore.calls().doc();
+            this.currentCallId = callRef.id;
+
+            await callRef.set({
+                callerId: user.uid,
+                calleeId: userId,
+                state: 'requested',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const offer = await this.peerConnection.createOffer(offerOptions);
+            await this.peerConnection.setLocalDescription(offer);
+
+            await callRef.update({
+                offer: {
+                    type: offer.type,
+                    sdp: offer.sdp
+                },
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            console.log("✅ Call offer sent to customer");
+
+            this.listenForAnswer(callRef);
+            this.listenForIceCandidates(callRef, 'answerCandidates');
+
+            this.showCallUI();
+            alert('Calling customer...');
+
+        } catch (error) {
+            console.error('❌ Admin call failed:', error);
+            alert('Call failed: ' + error.message);
+            this.cleanup();
+        }
     },
 
-    // Call Setup Helpers
-    setupCallListeners(callRef) {
-        // Listen for answer
-        callRef.onSnapshot(async (snap) => {
-            const data = snap.data();
+    // Answer incoming call
+    async answerCall(callId) {
+        try {
+            console.log("📞 Answering call:", callId);
+            this.isCaller = false;
+            this.currentCallId = callId;
+
+            const callRef = Firestore.calls().doc(callId);
+            
+            await this.prepareLocalMedia();
+            await this.createPeerConnection();
+
+            // Get the offer
+            const callDoc = await callRef.get();
+            const callData = callDoc.data();
+
+            if (!callData.offer) {
+                throw new Error('No offer found in call document');
+            }
+
+            // Set remote description FIRST
+            await this.peerConnection.setRemoteDescription(
+                new RTCSessionDescription(callData.offer)
+            );
+
+            // Create answer with options
+            const answerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const answer = await this.peerConnection.createAnswer(answerOptions);
+            await this.peerConnection.setLocalDescription(answer);
+
+            await callRef.update({
+                answer: {
+                    type: answer.type,
+                    sdp: answer.sdp
+                },
+                state: 'accepted',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            console.log("✅ Call answered");
+
+            // Listen for ICE candidates
+            this.listenForIceCandidates(callRef, 'offerCandidates');
+
+            this.showCallUI();
+
+        } catch (error) {
+            console.error('❌ Answer call failed:', error);
+            alert('Failed to answer call: ' + error.message);
+            this.cleanup();
+        }
+    },
+
+    // Listen for answer
+    listenForAnswer(callRef) {
+        callRef.onSnapshot(async (snapshot) => {
+            const data = snapshot.data();
             if (!data) return;
 
             if (data.answer && !this.peerConnection.currentRemoteDescription) {
-                const answer = new RTCSessionDescription(data.answer);
-                await this.peerConnection.setRemoteDescription(answer);
+                console.log("✅ Answer received");
+                try {
+                    const answer = new RTCSessionDescription(data.answer);
+                    await this.peerConnection.setRemoteDescription(answer);
+                    console.log("✅ Remote description set from answer");
+                } catch (error) {
+                    console.error('❌ Error setting remote description:', error);
+                }
             }
 
-            if (data.state === 'ended') this.hangupCall();
+            if (data.state === 'ended') {
+                console.log("📞 Call ended by remote party");
+                this.hangupCall();
+            }
         });
+    },
 
-        // Listen for answer candidates
-        callRef.collection('answerCandidates').onSnapshot((snap) => {
-            snap.docChanges().forEach(async (change) => {
+    // Listen for ICE candidates
+    listenForIceCandidates(callRef, candidateType) {
+        callRef.collection(candidateType).onSnapshot((snapshot) => {
+            snapshot.docChanges().forEach(async (change) => {
                 if (change.type === 'added') {
-                    const candidate = new RTCIceCandidate(change.doc.data());
-                    await this.peerConnection.addIceCandidate(candidate);
+                    try {
+                        const candidate = new RTCIceCandidate(change.doc.data());
+                        await this.peerConnection.addIceCandidate(candidate);
+                        console.log("❄️ ICE candidate added:", candidateType);
+                    } catch (error) {
+                        console.error('❌ Error adding ICE candidate:', error);
+                    }
                 }
             });
         });
     },
 
-    setupAnswerListeners(callRef) {
-        // Listen for offer candidates
-        callRef.collection('offerCandidates').onSnapshot((snap) => {
-            snap.docChanges().forEach(async (change) => {
-                if (change.type === 'added') {
-                    const candidate = new RTCIceCandidate(change.doc.data());
-                    await this.peerConnection.addIceCandidate(candidate);
-                }
-            });
-        });
+    // Send ICE candidate
+    async sendIceCandidate(candidate) {
+        if (!this.currentCallId) return;
+
+        try {
+            const callRef = Firestore.calls().doc(this.currentCallId);
+            const candidateData = candidate.toJSON();
+            
+            const collectionName = this.isCaller ? 'offerCandidates' : 'answerCandidates';
+            await callRef.collection(collectionName).add(candidateData);
+            console.log("❄️ ICE candidate sent to", collectionName);
+        } catch (error) {
+            console.error('❌ Error sending ICE candidate:', error);
+        }
     },
 
-    // Call Termination
+    // Show call connected state
+    showCallConnected() {
+        const modal = document.getElementById('call-modal');
+        if (modal) {
+            const title = modal.querySelector('h3');
+            if (title) {
+                title.textContent += ' (Connected)';
+            }
+        }
+        
+        // Play remote video if it's paused
+        const remoteVideo = document.getElementById('remote-video');
+        if (remoteVideo && remoteVideo.paused) {
+            remoteVideo.play().catch(console.error);
+        }
+    },
+
+    // Hang up call
     async hangupCall() {
+        console.log("📞 Hanging up call...");
+        this.cleanup();
+    },
+
+    // Cleanup resources
+    cleanup() {
         try {
             if (this.peerConnection) {
                 this.peerConnection.close();
@@ -238,81 +444,156 @@ const CallManager = {
             }
 
             if (this.localStream) {
-                this.localStream.getTracks().forEach(track => track.stop());
+                this.localStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("🛑 Stopped local track:", track.kind);
+                });
                 this.localStream = null;
             }
 
             if (this.remoteStream) {
-                this.remoteStream.getTracks().forEach(track => track.stop());
+                this.remoteStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("🛑 Stopped remote track:", track.kind);
+                });
                 this.remoteStream = null;
             }
 
             if (this.currentCallId) {
-                await Firestore.calls().doc(this.currentCallId).update({ 
+                Firestore.calls().doc(this.currentCallId).update({
                     state: 'ended',
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
-                });
+                    endedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }).catch(console.error);
                 this.currentCallId = null;
             }
 
             this.hideCallUI();
+            console.log("✅ Call cleanup completed");
+
         } catch (error) {
-            console.warn('Error during hangup:', error);
+            console.error('❌ Error during cleanup:', error);
         }
     },
 
-    // UI Management
-    showCallUI() {
-        const modal = DOM.q('#call-modal');
-        if (modal) modal.style.display = 'flex';
-    },
+    // Listen for incoming calls
+    listenForIncomingCalls() {
+        const user = firebase.auth().currentUser;
+        if (!user) return;
 
-    hideCallUI() {
-        const modal = DOM.q('#call-modal');
-        if (modal) modal.style.display = 'none';
-
-        const remoteVideo = DOM.q('#remote-video');
-        const localVideo = DOM.q('#local-video');
-        
-        if (remoteVideo) remoteVideo.srcObject = null;
-        if (localVideo) localVideo.srcObject = null;
-    },
-
-    // Incoming Call Handling
-    listenForCallRequests() {
-        const currentUser = firebase.auth().currentUser;
-        if (!currentUser) return;
+        console.log("👂 Listening for incoming calls...");
 
         Firestore.calls()
-            .where('calleeId', '==', currentUser.uid)
+            .where('calleeId', '==', user.uid)
             .where('state', '==', 'requested')
             .onSnapshot((snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === 'added') {
+                        console.log("📞 Incoming call detected:", change.doc.id);
                         this.handleIncomingCall(change.doc.id, change.doc.data());
                     }
                 });
             });
     },
 
+    // Handle incoming call
     handleIncomingCall(callId, callData) {
-        const callerName = callData.callerId || callData.callerName || 'Customer';
+        console.log("📞 Handling incoming call:", callId);
         
-        if (confirm(`Incoming call from ${callerName}. Accept?`)) {
-            this.answerCall(callId);
+        // Store the call ID globally for the answer/decline functions
+        window.currentIncomingCallId = callId;
+        
+        const callerName = callData.callerName || 'Customer';
+        const isAdmin = document.getElementById('admin-orders'); // Check if we're in admin panel
+        
+        if (isAdmin) {
+            // Admin interface
+            if (confirm(`Incoming call from ${callerName}. Accept?`)) {
+                this.answerCall(callId);
+            } else {
+                this.declineCall(callId);
+            }
         } else {
-            Firestore.calls().doc(callId).update({ state: 'ended' });
+            // Customer interface - show notification
+            const incomingCallBox = document.getElementById('incoming-call-box');
+            if (incomingCallBox) {
+                incomingCallBox.innerHTML = `
+                    <p>📞 Incoming call from CobainTech Support</p>
+                    <button onclick="answerIncomingCall()" class="btn primary">Answer</button>
+                    <button onclick="declineIncomingCall()" class="btn ghost">Decline</button>
+                `;
+                incomingCallBox.style.display = 'block';
+            }
         }
+    },
+
+    // Decline call
+    async declineCall(callId) {
+        await Firestore.calls().doc(callId).update({
+            state: 'declined',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        console.log("📞 Call declined");
+    },
+
+    // UI Management
+    showCallUI() {
+        const modal = document.getElementById('call-modal');
+        if (modal) {
+            modal.style.display = 'flex';
+            console.log("✅ Call UI shown");
+        }
+        
+        // Update call buttons
+        this.updateCallButtons(true);
+    },
+
+    hideCallUI() {
+        const modal = document.getElementById('call-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+
+        const remoteVideo = document.getElementById('remote-video');
+        const localVideo = document.getElementById('local-video');
+        
+        if (remoteVideo) {
+            remoteVideo.srcObject = null;
+            remoteVideo.load(); // Reset video element
+        }
+        if (localVideo) {
+            localVideo.srcObject = null;
+            localVideo.load(); // Reset video element
+        }
+        
+        // Update call buttons
+        this.updateCallButtons(false);
+        
+        console.log("✅ Call UI hidden");
+    },
+
+    updateCallButtons(isInCall) {
+        const callBtn = document.getElementById('btn-call');
+        const hangupBtn = document.getElementById('btn-hangup');
+        
+        if (callBtn) callBtn.style.display = isInCall ? 'none' : 'block';
+        if (hangupBtn) hangupBtn.style.display = isInCall ? 'block' : 'none';
     }
 };
 
-/* ---------- Simplified Call Functions (Public Interface) ---------- */
+// Initialize call manager when page loads
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        CallManager.init();
+    }, 1000);
+});
+
+/* ---------- Simplified Public Call Functions ---------- */
 function startCallToAdmin() {
-    CallManager.startCall("JIDFGUZI2qTo8nexGBjiOWM4sIy1");
+    CallManager.startCallAsCustomer();
 }
 
 function startCallAsAdmin(userId) {
-    CallManager.startCall(userId);
+    CallManager.startCallAsAdmin(userId);
 }
 
 function acceptCall(callId) {
@@ -323,8 +604,27 @@ function endCall() {
     CallManager.hangupCall();
 }
 
+function answerIncomingCall() {
+    if (window.currentIncomingCallId) {
+        CallManager.answerCall(window.currentIncomingCallId);
+        const incomingCallBox = document.getElementById('incoming-call-box');
+        if (incomingCallBox) incomingCallBox.style.display = 'none';
+        window.currentIncomingCallId = null;
+    }
+}
+
+function declineIncomingCall() {
+    if (window.currentIncomingCallId) {
+        CallManager.declineCall(window.currentIncomingCallId);
+        const incomingCallBox = document.getElementById('incoming-call-box');
+        if (incomingCallBox) incomingCallBox.style.display = 'none';
+        window.currentIncomingCallId = null;
+    }
+}
+
 function listenForCallRequests() {
-    CallManager.listenForCallRequests();
+    // This is now handled automatically by CallManager.init()
+    console.log("📞 Call listener activated");
 }
 
 /* ---------- Chat System ---------- */
