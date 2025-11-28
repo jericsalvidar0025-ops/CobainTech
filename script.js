@@ -60,7 +60,7 @@ window.addEventListener('load', () => {
     initCustomerOrders();
 });
 
-/* ---------- WebRTC Call System (Fixed Admin Issues) ---------- */
+/* ---------- WebRTC Call System (With Ringtone) ---------- */
 const CallManager = {
     config: { 
         iceServers: [
@@ -75,7 +75,6 @@ const CallManager = {
     isCaller: false,
     ringtoneAudio: null,
     ringtoneInterval: null,
-    useCamera: true,
 
     // Initialize call system
     init() {
@@ -84,16 +83,18 @@ const CallManager = {
         this.listenForIncomingCalls();
     },
 
-    // Setup ringtone audio - SIMPLIFIED VERSION
+    // Setup ringtone audio
     setupRingtone() {
         this.ringtoneAudio = new Audio();
-        // Create a simple beep ringtone using JavaScript
-        this.createSimpleRingtone();
+        this.ringtoneAudio.loop = true;
+        
+        // Create a simple ringtone using Web Audio API for better compatibility
+        this.createRingtone();
     },
 
-    createSimpleRingtone() {
+    // Create a ringtone using Web Audio API
+    createRingtone() {
         try {
-            // Simple beep ringtone using Web Audio API
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -102,97 +103,87 @@ const CallManager = {
             gainNode.connect(audioContext.destination);
             
             oscillator.type = 'sine';
-            oscillator.frequency.value = 800;
-            gainNode.gain.value = 0.1;
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.5);
             
-            oscillator.start();
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
-            oscillator.stop(audioContext.currentTime + 0.3);
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime + 0.5);
+            
+            // Create a 2-second ringtone pattern
+            const ringtoneSource = `
+                data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==
+            `;
+            
+            // Fallback: Use a simple beep ringtone
+            this.ringtoneAudio.src = "data:audio/wav;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAABAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////8AAABhTEFNRTMuMTAwBKkAAAAAAAAAADUgJAOBQQAARAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQxAADwAABpAAAAlAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
             
         } catch (error) {
-            console.log("Web Audio not available, using timeout-based ringtone");
+            console.log("❌ Web Audio API not supported, using fallback ringtone");
         }
     },
 
-    // Play ringtone - SIMPLIFIED
+    // Play ringtone
     playRingtone() {
-        console.log("🔔 Playing ringtone...");
-        this.stopRingtone(); // Stop any existing ringtone first
-        
         try {
-            // Use simple timeout-based beeps for maximum compatibility
-            this.ringtoneInterval = setInterval(() => {
-                // This creates a visual "ring" effect since audio might be blocked
-                const incomingCallBox = document.getElementById('incoming-call-box');
-                if (incomingCallBox) {
-                    incomingCallBox.style.borderColor = incomingCallBox.style.borderColor === 'red' ? '#3498db' : 'red';
-                }
+            if (this.ringtoneAudio) {
+                this.ringtoneAudio.currentTime = 0;
+                this.ringtoneAudio.play().catch(e => {
+                    console.log("❌ Ringtone play failed:", e);
+                    this.playFallbackRingtone();
+                });
+            } else {
+                this.playFallbackRingtone();
+            }
+        } catch (error) {
+            console.log("❌ Ringtone error:", error);
+            this.playFallbackRingtone();
+        }
+    },
+
+    // Fallback ringtone using beeps
+    playFallbackRingtone() {
+        try {
+            // Create a simple beep ringtone using the Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            const playBeep = () => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
                 
-                // Try to play a simple beep sound
-                try {
-                    const beep = new Audio();
-                    beep.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
-                    beep.volume = 0.1;
-                    beep.play().catch(() => {});
-                } catch (e) {}
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
                 
-            }, 1000);
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 800;
+                gainNode.gain.value = 0.1;
+                
+                oscillator.start();
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            };
+            
+            // Play beep every second
+            this.ringtoneInterval = setInterval(playBeep, 1000);
             
         } catch (error) {
-            console.log("Ringtone setup failed:", error);
+            console.log("❌ Fallback ringtone failed:", error);
         }
     },
 
     // Stop ringtone
     stopRingtone() {
-        console.log("🔕 Stopping ringtone...");
         try {
+            if (this.ringtoneAudio) {
+                this.ringtoneAudio.pause();
+                this.ringtoneAudio.currentTime = 0;
+            }
+            
             if (this.ringtoneInterval) {
                 clearInterval(this.ringtoneInterval);
                 this.ringtoneInterval = null;
             }
-            
-            // Reset border color
-            const incomingCallBox = document.getElementById('incoming-call-box');
-            if (incomingCallBox) {
-                incomingCallBox.style.borderColor = '#3498db';
-            }
         } catch (error) {
-            console.log("Stop ringtone error:", error);
-        }
-    },
-
-    // Toggle camera on/off
-    async toggleCamera() {
-        if (!this.localStream) return;
-        
-        this.useCamera = !this.useCamera;
-        console.log("📷 Camera toggled:", this.useCamera ? "ON" : "OFF");
-        
-        const videoTracks = this.localStream.getVideoTracks();
-        
-        if (videoTracks.length > 0) {
-            videoTracks.forEach(track => {
-                track.enabled = this.useCamera;
-            });
-            
-            // Update UI
-            this.updateCameraButton();
-            
-            // Update video element
-            const localVideo = document.getElementById('local-video');
-            if (localVideo) {
-                localVideo.style.display = this.useCamera ? 'block' : 'none';
-            }
-        }
-    },
-
-    // Update camera button
-    updateCameraButton() {
-        const cameraBtn = document.getElementById('camera-toggle-btn');
-        if (cameraBtn) {
-            cameraBtn.innerHTML = this.useCamera ? '📷 Camera On' : '📷 Camera Off';
-            cameraBtn.style.background = this.useCamera ? '#27ae60' : '#e74c3c';
+            console.log("❌ Stop ringtone error:", error);
         }
     },
 
@@ -200,25 +191,23 @@ const CallManager = {
     async prepareLocalMedia() {
         try {
             console.log("🎥 Preparing local media...");
-            
-            const constraints = {
+            this.localStream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
                     echoCancellation: true,
-                    noiseSuppression: true
-                },
-                video: this.useCamera ? {
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }, 
+                video: {
                     width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                } : false
-            };
-            
-            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                }
+            });
             
             const localEl = document.getElementById('local-video');
             if (localEl) {
                 localEl.srcObject = this.localStream;
                 localEl.muted = true;
-                localEl.style.display = this.useCamera ? 'block' : 'none';
                 console.log("✅ Local media ready");
             }
         } catch (err) {
@@ -238,11 +227,13 @@ const CallManager = {
         const remoteEl = document.getElementById('remote-video');
         if (remoteEl) {
             remoteEl.srcObject = this.remoteStream;
+            remoteEl.muted = false;
         }
 
-        // Add local tracks
+        // Add local tracks to connection
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => {
+                console.log("🎯 Adding local track:", track.kind);
                 this.peerConnection.addTrack(track, this.localStream);
             });
         }
@@ -254,6 +245,14 @@ const CallManager = {
                 const remoteEl = document.getElementById('remote-video');
                 if (remoteEl) {
                     remoteEl.srcObject = event.streams[0];
+                    console.log("✅ Remote stream attached to video element");
+                }
+            } else if (event.track) {
+                this.remoteStream.addTrack(event.track);
+                const remoteEl = document.getElementById('remote-video');
+                if (remoteEl) {
+                    remoteEl.srcObject = this.remoteStream;
+                    console.log("✅ Remote track added to stream");
                 }
             }
         };
@@ -261,7 +260,10 @@ const CallManager = {
         // Handle ICE candidates
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
+                console.log("❄️ ICE candidate generated");
                 this.sendIceCandidate(event.candidate);
+            } else {
+                console.log("✅ All ICE candidates gathered");
             }
         };
 
@@ -270,8 +272,17 @@ const CallManager = {
             console.log(`🔌 Connection state: ${this.peerConnection.connectionState}`);
             if (this.peerConnection.connectionState === 'connected') {
                 console.log("✅ Call connected!");
-                this.stopRingtone();
+                this.showCallConnected();
+                this.stopRingtone(); // Stop ringtone when call connects
+            } else if (this.peerConnection.connectionState === 'failed') {
+                console.error("❌ Call connection failed");
+                alert("Call connection failed. Please try again.");
+                this.hangupCall();
             }
+        };
+
+        this.peerConnection.oniceconnectionstatechange = () => {
+            console.log(`🧊 ICE connection state: ${this.peerConnection.iceConnectionState}`);
         };
     },
 
@@ -300,7 +311,12 @@ const CallManager = {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            const offer = await this.peerConnection.createOffer();
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const offer = await this.peerConnection.createOffer(offerOptions);
             await this.peerConnection.setLocalDescription(offer);
 
             await callRef.update({
@@ -313,10 +329,14 @@ const CallManager = {
 
             console.log("✅ Call offer sent");
             
+            // Play ringtone for outgoing call
             this.playRingtone();
+
             this.listenForAnswer(callRef);
             this.listenForIceCandidates(callRef, 'answerCandidates');
+
             this.showCallUI();
+            alert('Calling admin...');
 
         } catch (error) {
             console.error('❌ Call failed:', error);
@@ -350,7 +370,12 @@ const CallManager = {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            const offer = await this.peerConnection.createOffer();
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const offer = await this.peerConnection.createOffer(offerOptions);
             await this.peerConnection.setLocalDescription(offer);
 
             await callRef.update({
@@ -363,10 +388,14 @@ const CallManager = {
 
             console.log("✅ Call offer sent to customer");
             
+            // Play ringtone for outgoing call
             this.playRingtone();
+
             this.listenForAnswer(callRef);
             this.listenForIceCandidates(callRef, 'answerCandidates');
+
             this.showCallUI();
+            alert('Calling customer...');
 
         } catch (error) {
             console.error('❌ Admin call failed:', error);
@@ -382,6 +411,7 @@ const CallManager = {
             this.isCaller = false;
             this.currentCallId = callId;
 
+            // Stop ringtone when answering
             this.stopRingtone();
 
             const callRef = Firestore.calls().doc(callId);
@@ -400,7 +430,12 @@ const CallManager = {
                 new RTCSessionDescription(callData.offer)
             );
 
-            const answer = await this.peerConnection.createAnswer();
+            const answerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            
+            const answer = await this.peerConnection.createAnswer(answerOptions);
             await this.peerConnection.setLocalDescription(answer);
 
             await callRef.update({
@@ -415,6 +450,7 @@ const CallManager = {
             console.log("✅ Call answered");
 
             this.listenForIceCandidates(callRef, 'offerCandidates');
+
             this.showCallUI();
 
         } catch (error) {
@@ -435,15 +471,19 @@ const CallManager = {
                 try {
                     const answer = new RTCSessionDescription(data.answer);
                     await this.peerConnection.setRemoteDescription(answer);
+                    console.log("✅ Remote description set from answer");
+                    
+                    // Stop ringtone when call is answered
                     this.stopRingtone();
+                    
                 } catch (error) {
-                    console.error('Error setting remote description:', error);
+                    console.error('❌ Error setting remote description:', error);
                 }
             }
 
             if (data.state === 'ended') {
                 console.log("📞 Call ended by remote party");
-                this.stopRingtone();
+                this.stopRingtone(); // Stop ringtone when call ends
                 this.hangupCall();
             }
         });
@@ -457,8 +497,9 @@ const CallManager = {
                     try {
                         const candidate = new RTCIceCandidate(change.doc.data());
                         await this.peerConnection.addIceCandidate(candidate);
+                        console.log("❄️ ICE candidate added:", candidateType);
                     } catch (error) {
-                        console.error('Error adding ICE candidate:', error);
+                        console.error('❌ Error adding ICE candidate:', error);
                     }
                 }
             });
@@ -475,14 +516,32 @@ const CallManager = {
             
             const collectionName = this.isCaller ? 'offerCandidates' : 'answerCandidates';
             await callRef.collection(collectionName).add(candidateData);
+            console.log("❄️ ICE candidate sent to", collectionName);
         } catch (error) {
-            console.error('Error sending ICE candidate:', error);
+            console.error('❌ Error sending ICE candidate:', error);
+        }
+    },
+
+    // Show call connected state
+    showCallConnected() {
+        const modal = document.getElementById('call-modal');
+        if (modal) {
+            const title = modal.querySelector('h3');
+            if (title) {
+                title.textContent += ' (Connected)';
+            }
+        }
+        
+        const remoteVideo = document.getElementById('remote-video');
+        if (remoteVideo && remoteVideo.paused) {
+            remoteVideo.play().catch(console.error);
         }
     },
 
     // Hang up call
     async hangupCall() {
         console.log("📞 Hanging up call...");
+        this.stopRingtone(); // Stop ringtone when hanging up
         this.cleanup();
     },
 
@@ -495,12 +554,18 @@ const CallManager = {
             }
 
             if (this.localStream) {
-                this.localStream.getTracks().forEach(track => track.stop());
+                this.localStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("🛑 Stopped local track:", track.kind);
+                });
                 this.localStream = null;
             }
 
             if (this.remoteStream) {
-                this.remoteStream.getTracks().forEach(track => track.stop());
+                this.remoteStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("🛑 Stopped remote track:", track.kind);
+                });
                 this.remoteStream = null;
             }
 
@@ -512,71 +577,59 @@ const CallManager = {
                 this.currentCallId = null;
             }
 
-            this.stopRingtone();
+            this.stopRingtone(); // Ensure ringtone is stopped
             this.hideCallUI();
             console.log("✅ Call cleanup completed");
 
         } catch (error) {
-            console.error('Error during cleanup:', error);
+            console.error('❌ Error during cleanup:', error);
         }
     },
 
-    // Listen for incoming calls - FIXED FOR ADMIN
+    // Listen for incoming calls
     listenForIncomingCalls() {
         const user = firebase.auth().currentUser;
-        if (!user) {
-            console.log("❌ No user found for call listening");
-            return;
-        }
+        if (!user) return;
 
-        console.log("👂 Listening for incoming calls for user:", user.uid);
+        console.log("👂 Listening for incoming calls...");
 
         Firestore.calls()
             .where('calleeId', '==', user.uid)
             .where('state', '==', 'requested')
             .onSnapshot((snapshot) => {
-                console.log("📞 Call snapshot received:", snapshot.size, "calls");
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === 'added') {
                         console.log("📞 Incoming call detected:", change.doc.id);
                         this.handleIncomingCall(change.doc.id, change.doc.data());
                     }
                 });
-            }, (error) => {
-                console.error("❌ Call listener error:", error);
             });
     },
 
-    // Handle incoming call - FIXED FOR ADMIN
+    // Handle incoming call
     handleIncomingCall(callId, callData) {
-        console.log("📞 Handling incoming call:", callId, callData);
+        console.log("📞 Handling incoming call:", callId);
         
+        // Store the call ID globally for the answer/decline functions
         window.currentIncomingCallId = callId;
         
-        // PLAY RINGTONE IMMEDIATELY
-        this.playRingtone();
-        
-        const isAdmin = document.getElementById('admin-orders'); // Check if admin page
+        const callerName = callData.callerName || 'Customer';
+        const isAdmin = document.getElementById('admin-orders'); // Check if we're in admin panel
         
         if (isAdmin) {
-            // Admin side - use confirm dialog
-            console.log("🛎️ Admin incoming call");
-            
-            // Small delay to ensure ringtone starts
-            setTimeout(() => {
-                const callerId = callData.callerId || 'Unknown';
-                if (confirm(`📞 Incoming call from user: ${callerId}\n\nAccept call?`)) {
-                    this.stopRingtone();
-                    this.answerCall(callId);
-                } else {
-                    this.stopRingtone();
-                    this.declineCall(callId);
-                }
-            }, 500);
-            
+            // Admin interface
+            this.playRingtone(); // Play ringtone for incoming call
+            if (confirm(`Incoming call from ${callerName}. Accept?`)) {
+                this.stopRingtone();
+                this.answerCall(callId);
+            } else {
+                this.stopRingtone();
+                this.declineCall(callId);
+            }
         } else {
-            // Customer side - show notification box
-            console.log("🛎️ Customer incoming call");
+            // Customer interface - show notification with ringtone
+            this.playRingtone(); // Play ringtone for incoming call
+            
             const incomingCallBox = document.getElementById('incoming-call-box');
             if (incomingCallBox) {
                 incomingCallBox.innerHTML = `
@@ -591,7 +644,7 @@ const CallManager = {
 
     // Decline call
     async declineCall(callId) {
-        this.stopRingtone();
+        this.stopRingtone(); // Stop ringtone when declining
         await Firestore.calls().doc(callId).update({
             state: 'declined',
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -604,37 +657,10 @@ const CallManager = {
         const modal = document.getElementById('call-modal');
         if (modal) {
             modal.style.display = 'flex';
-            
-            // Add camera toggle button if not exists
-            this.addCameraToggleButton();
+            console.log("✅ Call UI shown");
         }
         
         this.updateCallButtons(true);
-    },
-
-    // Add camera toggle button
-    addCameraToggleButton() {
-        const modal = document.getElementById('call-modal');
-        if (!modal || document.getElementById('camera-toggle-btn')) return;
-        
-        const buttonContainer = modal.querySelector('.modal-inner');
-        if (buttonContainer) {
-            const cameraButton = document.createElement('button');
-            cameraButton.id = 'camera-toggle-btn';
-            cameraButton.className = 'btn small';
-            cameraButton.innerHTML = this.useCamera ? '📷 Camera On' : '📷 Camera Off';
-            cameraButton.style.background = this.useCamera ? '#27ae60' : '#e74c3c';
-            cameraButton.style.margin = '10px 5px';
-            cameraButton.onclick = () => this.toggleCamera();
-            
-            // Add to modal
-            const videoContainer = modal.querySelector('.call-video-container');
-            if (videoContainer && videoContainer.nextSibling) {
-                buttonContainer.insertBefore(cameraButton, videoContainer.nextSibling);
-            } else {
-                buttonContainer.appendChild(cameraButton);
-            }
-        }
     },
 
     hideCallUI() {
@@ -646,13 +672,17 @@ const CallManager = {
         const remoteVideo = document.getElementById('remote-video');
         const localVideo = document.getElementById('local-video');
         
-        if (remoteVideo) remoteVideo.srcObject = null;
+        if (remoteVideo) {
+            remoteVideo.srcObject = null;
+            remoteVideo.load();
+        }
         if (localVideo) {
             localVideo.srcObject = null;
-            localVideo.style.display = 'block';
+            localVideo.load();
         }
         
         this.updateCallButtons(false);
+        console.log("✅ Call UI hidden");
     },
 
     updateCallButtons(isInCall) {
@@ -664,52 +694,33 @@ const CallManager = {
     }
 };
 
-// Initialize call manager
+// Initialize call manager when page loads
 window.addEventListener('load', () => {
     setTimeout(() => {
-        if (typeof CallManager !== 'undefined') {
-            CallManager.init();
-            console.log("✅ CallManager initialized successfully");
-        } else {
-            console.error("❌ CallManager not found");
-        }
-    }, 2000);
+        CallManager.init();
+    }, 1000);
 });
 
-/* ---------- Public Call Functions ---------- */
+/* ---------- Simplified Public Call Functions ---------- */
 function startCallToAdmin() {
-    if (typeof CallManager !== 'undefined') {
-        CallManager.startCallAsCustomer();
-    } else {
-        console.error("CallManager not available");
-        alert("Call system is not ready. Please wait a moment and try again.");
-    }
+    CallManager.startCallAsCustomer();
 }
 
 function startCallAsAdmin(userId) {
-    if (typeof CallManager !== 'undefined') {
-        CallManager.startCallAsAdmin(userId);
-    } else {
-        console.error("CallManager not available");
-        alert("Call system is not ready.");
-    }
+    CallManager.startCallAsAdmin(userId);
 }
 
 function acceptCall(callId) {
-    if (typeof CallManager !== 'undefined') {
-        CallManager.answerCall(callId);
-    }
+    CallManager.answerCall(callId);
 }
 
 function endCall() {
-    if (typeof CallManager !== 'undefined') {
-        CallManager.hangupCall();
-    }
+    CallManager.hangupCall();
 }
 
 function answerIncomingCall() {
-    if (window.currentIncomingCallId && typeof CallManager !== 'undefined') {
-        CallManager.stopRingtone();
+    if (window.currentIncomingCallId) {
+        CallManager.stopRingtone(); // Stop ringtone when answering
         CallManager.answerCall(window.currentIncomingCallId);
         const incomingCallBox = document.getElementById('incoming-call-box');
         if (incomingCallBox) incomingCallBox.style.display = 'none';
@@ -718,8 +729,8 @@ function answerIncomingCall() {
 }
 
 function declineIncomingCall() {
-    if (window.currentIncomingCallId && typeof CallManager !== 'undefined') {
-        CallManager.stopRingtone();
+    if (window.currentIncomingCallId) {
+        CallManager.stopRingtone(); // Stop ringtone when declining
         CallManager.declineCall(window.currentIncomingCallId);
         const incomingCallBox = document.getElementById('incoming-call-box');
         if (incomingCallBox) incomingCallBox.style.display = 'none';
@@ -727,10 +738,8 @@ function declineIncomingCall() {
     }
 }
 
-function toggleCamera() {
-    if (typeof CallManager !== 'undefined') {
-        CallManager.toggleCamera();
-    }
+function listenForCallRequests() {
+    console.log("📞 Call listener activated");
 }
 /* ---------- CUSTOMER-side chat ---------- */
 function startCustomerChat(userId, displayName = null) {
@@ -1773,6 +1782,7 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
 
