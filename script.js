@@ -525,37 +525,6 @@ function listenForCallRequests() {
     console.log("📞 Call listener activated");
 }
 
-    handleIncomingCall(callId, callData) {
-        const callerName = callData.callerId || callData.callerName || 'Customer';
-        
-        if (confirm(`Incoming call from ${callerName}. Accept?`)) {
-            this.answerCall(callId);
-        } else {
-            Firestore.calls().doc(callId).update({ state: 'ended' });
-        }
-    }
-
-/* ---------- Simplified Call Functions (Public Interface) ---------- */
-function startCallToAdmin() {
-    CallManager.startCall("JIDFGUZI2qTo8nexGBjiOWM4sIy1");
-}
-
-function startCallAsAdmin(userId) {
-    CallManager.startCall(userId);
-}
-
-function acceptCall(callId) {
-    CallManager.answerCall(callId);
-}
-
-function endCall() {
-    CallManager.hangupCall();
-}
-
-function listenForCallRequests() {
-    CallManager.listenForCallRequests();
-}
-
 /* ---------- Chat System ---------- */
 const TYPING_DEBOUNCE_MS = 1200;
 let typingTimer = null;
@@ -1653,5 +1622,6 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
