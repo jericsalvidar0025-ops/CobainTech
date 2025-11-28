@@ -819,7 +819,7 @@ const CallManager = {
             this.hangupCall();
         }
     });
-}
+},
 
     // Listen for ICE candidates
     listenForIceCandidates(callRef, candidateType) {
@@ -836,7 +836,7 @@ const CallManager = {
                 }
             });
         });
-    }
+    },
 
     // Send ICE candidate
     async sendIceCandidate(candidate) {
@@ -2187,5 +2187,6 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
