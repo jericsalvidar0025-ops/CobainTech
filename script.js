@@ -50,21 +50,6 @@ const Firestore = {
     calls: () => db.collection('calls')
 };
 
-/* ---------- Application Initialization ---------- */
-window.addEventListener('load', () => {
-    setFooterYear();
-    bindAuthState();
-    initIndex();
-    initAdmin();
-    initChat();
-    initCustomerOrders();
-    
-    // Initialize call manager with delay to ensure everything is loaded
-    setTimeout(() => {
-        CallManager.init();
-    }, 1000);
-});
-
 /* ---------- Chat System Initialization ---------- */
 const TYPING_DEBOUNCE_MS = 1200;
 let typingTimer = null;
@@ -94,6 +79,8 @@ function initChat(){
             }
             // start watcher for new messages (for notifications and global badge)
             startGlobalNotificationWatcher();
+            // listen for incoming call requests (if admin)
+            listenForCallRequests();
         }
     });
 
@@ -119,7 +106,17 @@ function initChat(){
     });
 }
 
-/* ---------- WebRTC Call System (Fixed Stream Handling) ---------- */
+/* ---------- Application Initialization ---------- */
+window.addEventListener('load', () => {
+    setFooterYear();
+    bindAuthState();
+    initIndex();
+    initAdmin();
+    initChat(); // This will now work
+    initCustomerOrders();
+});
+
+/* ---------- WebRTC Call System (Upgraded with Camera Toggle & Features) ---------- */
 const CallManager = {
     config: { 
         iceServers: [
@@ -132,40 +129,377 @@ const CallManager = {
     peerConnection: null,
     currentCallId: null,
     isCaller: false,
+    ringtoneAudio: null,
+    ringtoneInterval: null,
+    isVideoEnabled: true,
+    isAudioEnabled: true,
+    callStartTime: null,
+    callTimerInterval: null,
+    isScreenSharing: false,
+    screenStream: null,
 
     // Initialize call system
     init() {
         console.log("📞 CallManager initialized");
+        this.setupRingtone();
         this.listenForIncomingCalls();
+        this.setupCallUIListeners();
+    },
+
+    // Setup UI event listeners
+    setupCallUIListeners() {
+        // These will be attached when call UI is shown
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'toggle-video-btn') {
+                this.toggleVideo();
+            } else if (e.target.id === 'toggle-audio-btn') {
+                this.toggleAudio();
+            } else if (e.target.id === 'toggle-screen-share-btn') {
+                this.toggleScreenShare();
+            } else if (e.target.id === 'mute-remote-btn') {
+                this.toggleRemoteAudio();
+            } else if (e.target.id === 'call-duration') {
+                this.toggleTimerDisplay();
+            }
+        });
+    },
+
+    // Setup ringtone audio
+    setupRingtone() {
+        this.ringtoneAudio = new Audio();
+        this.ringtoneAudio.loop = true;
+        this.createRingtone();
+    },
+
+    // Create a ringtone using Web Audio API
+    createRingtone() {
+        try {
+            // Use a simple beep ringtone
+            this.ringtoneAudio.src = "data:audio/wav;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAABAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////8AAABhTEFNRTMuMTAwBKkAAAAAAAAAADUgJAOBQQAARAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQxAADwAABpAAAAlAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
+        } catch (error) {
+            console.log("❌ Ringtone setup failed:", error);
+        }
+    },
+
+    // Play ringtone
+    playRingtone() {
+        try {
+            if (this.ringtoneAudio) {
+                this.ringtoneAudio.currentTime = 0;
+                this.ringtoneAudio.play().catch(e => {
+                    console.log("❌ Ringtone play failed:", e);
+                    this.playFallbackRingtone();
+                });
+            } else {
+                this.playFallbackRingtone();
+            }
+        } catch (error) {
+            console.log("❌ Ringtone error:", error);
+            this.playFallbackRingtone();
+        }
+    },
+
+    // Fallback ringtone using beeps
+    playFallbackRingtone() {
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            const playBeep = () => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 800;
+                gainNode.gain.value = 0.1;
+                
+                oscillator.start();
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            };
+            
+            this.ringtoneInterval = setInterval(playBeep, 1000);
+            
+        } catch (error) {
+            console.log("❌ Fallback ringtone failed:", error);
+        }
+    },
+
+    // Stop ringtone
+    stopRingtone() {
+        try {
+            if (this.ringtoneAudio) {
+                this.ringtoneAudio.pause();
+                this.ringtoneAudio.currentTime = 0;
+            }
+            
+            if (this.ringtoneInterval) {
+                clearInterval(this.ringtoneInterval);
+                this.ringtoneInterval = null;
+            }
+        } catch (error) {
+            console.log("❌ Stop ringtone error:", error);
+        }
     },
 
     // Media Management
-    async prepareLocalMedia() {
+    async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
         try {
             console.log("🎥 Preparing local media...");
-            this.localStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: {
+            
+            const constraints = {
+                audio: audioEnabled ? {
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true
-                }, 
-                video: {
+                } : false,
+                video: videoEnabled ? {
                     width: { ideal: 1280 },
                     height: { ideal: 720 },
                     frameRate: { ideal: 30 }
-                }
-            });
+                } : false
+            };
+
+            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             
             const localEl = document.getElementById('local-video');
             if (localEl) {
                 localEl.srcObject = this.localStream;
-                localEl.muted = true; // Mute local video to avoid echo
+                localEl.muted = true;
                 console.log("✅ Local media ready");
             }
+
+            this.isVideoEnabled = videoEnabled;
+            this.isAudioEnabled = audioEnabled;
+
         } catch (err) {
             console.error('❌ Media access failed:', err);
             alert('Unable to access camera/microphone. Please check permissions.');
             throw err;
+        }
+    },
+
+    // Toggle video on/off
+    async toggleVideo() {
+        if (!this.localStream) return;
+
+        try {
+            const videoTrack = this.localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                this.isVideoEnabled = !this.isVideoEnabled;
+                videoTrack.enabled = this.isVideoEnabled;
+                
+                // Update UI
+                this.updateMediaButtons();
+                console.log(`📹 Video ${this.isVideoEnabled ? 'enabled' : 'disabled'}`);
+                
+                // Send state update to peer
+                this.sendMediaStateUpdate();
+            }
+        } catch (error) {
+            console.error('❌ Toggle video failed:', error);
+        }
+    },
+
+    // Toggle audio on/off
+    async toggleAudio() {
+        if (!this.localStream) return;
+
+        try {
+            const audioTrack = this.localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                this.isAudioEnabled = !this.isAudioEnabled;
+                audioTrack.enabled = this.isAudioEnabled;
+                
+                // Update UI
+                this.updateMediaButtons();
+                console.log(`🎤 Audio ${this.isAudioEnabled ? 'enabled' : 'disabled'}`);
+                
+                // Send state update to peer
+                this.sendMediaStateUpdate();
+            }
+        } catch (error) {
+            console.error('❌ Toggle audio failed:', error);
+        }
+    },
+
+    // Toggle screen sharing
+    async toggleScreenShare() {
+        try {
+            if (!this.isScreenSharing) {
+                // Start screen share
+                this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: true
+                });
+
+                const videoTrack = this.screenStream.getVideoTracks()[0];
+                
+                // Replace the video track in the peer connection
+                const sender = this.peerConnection.getSenders().find(s => 
+                    s.track && s.track.kind === 'video'
+                );
+                
+                if (sender) {
+                    await sender.replaceTrack(videoTrack);
+                    this.isScreenSharing = true;
+                    
+                    // Stop screen share when user stops it from browser UI
+                    videoTrack.onended = () => {
+                        this.toggleScreenShare();
+                    };
+                }
+
+            } else {
+                // Stop screen share and revert to camera
+                const videoTrack = this.localStream.getVideoTracks()[0];
+                const sender = this.peerConnection.getSenders().find(s => 
+                    s.track && s.track.kind === 'video'
+                );
+                
+                if (sender && videoTrack) {
+                    await sender.replaceTrack(videoTrack);
+                }
+                
+                if (this.screenStream) {
+                    this.screenStream.getTracks().forEach(track => track.stop());
+                    this.screenStream = null;
+                }
+                
+                this.isScreenSharing = false;
+            }
+
+            this.updateMediaButtons();
+            console.log(`🖥️ Screen sharing ${this.isScreenSharing ? 'enabled' : 'disabled'}`);
+
+        } catch (error) {
+            console.error('❌ Screen share failed:', error);
+            alert('Screen sharing failed or was cancelled.');
+        }
+    },
+
+    // Toggle remote audio (mute/unmute other person)
+    toggleRemoteAudio() {
+        const remoteVideo = document.getElementById('remote-video');
+        if (remoteVideo) {
+            remoteVideo.muted = !remoteVideo.muted;
+            this.updateMediaButtons();
+            console.log(`🔇 Remote audio ${remoteVideo.muted ? 'muted' : 'unmuted'}`);
+        }
+    },
+
+    // Send media state update to peer
+    sendMediaStateUpdate() {
+        if (!this.currentCallId) return;
+
+        Firestore.calls().doc(this.currentCallId).update({
+            mediaState: {
+                video: this.isVideoEnabled,
+                audio: this.isAudioEnabled,
+                screenShare: this.isScreenSharing,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }
+        }).catch(console.error);
+    },
+
+    // Listen for media state updates from peer
+    listenForMediaStateUpdates(callRef) {
+        callRef.onSnapshot((snapshot) => {
+            const data = snapshot.data();
+            if (data && data.mediaState) {
+                this.updateRemoteMediaState(data.mediaState);
+            }
+        });
+    },
+
+    // Update UI based on remote media state
+    updateRemoteMediaState(mediaState) {
+        const remoteVideo = document.getElementById('remote-video');
+        const remoteStateEl = document.getElementById('remote-media-state');
+        
+        if (remoteStateEl) {
+            let stateText = '';
+            if (!mediaState.video) stateText += '📹 Video off ';
+            if (!mediaState.audio) stateText += '🎤 Muted ';
+            if (mediaState.screenShare) stateText += '🖥️ Sharing screen';
+            
+            remoteStateEl.textContent = stateText || 'Connected';
+        }
+
+        // Show/hide remote video placeholder based on video state
+        const remoteVideoPlaceholder = document.getElementById('remote-video-placeholder');
+        if (remoteVideoPlaceholder) {
+            remoteVideoPlaceholder.style.display = mediaState.video ? 'none' : 'flex';
+        }
+    },
+
+    // Update media control buttons
+    updateMediaButtons() {
+        const videoBtn = document.getElementById('toggle-video-btn');
+        const audioBtn = document.getElementById('toggle-audio-btn');
+        const screenShareBtn = document.getElementById('toggle-screen-share-btn');
+        const muteRemoteBtn = document.getElementById('mute-remote-btn');
+        const remoteVideo = document.getElementById('remote-video');
+
+        if (videoBtn) {
+            videoBtn.innerHTML = this.isVideoEnabled ? '📹' : '📹❌';
+            videoBtn.title = this.isVideoEnabled ? 'Turn off camera' : 'Turn on camera';
+        }
+
+        if (audioBtn) {
+            audioBtn.innerHTML = this.isAudioEnabled ? '🎤' : '🎤❌';
+            audioBtn.title = this.isAudioEnabled ? 'Mute microphone' : 'Unmute microphone';
+        }
+
+        if (screenShareBtn) {
+            screenShareBtn.innerHTML = this.isScreenSharing ? '🖥️⏹️' : '🖥️';
+            screenShareBtn.title = this.isScreenSharing ? 'Stop screen share' : 'Share screen';
+        }
+
+        if (muteRemoteBtn && remoteVideo) {
+            muteRemoteBtn.innerHTML = remoteVideo.muted ? '🔇' : '🔊';
+            muteRemoteBtn.title = remoteVideo.muted ? 'Unmute remote' : 'Mute remote';
+        }
+    },
+
+    // Start call timer
+    startCallTimer() {
+        this.callStartTime = new Date();
+        this.callTimerInterval = setInterval(() => {
+            this.updateCallTimer();
+        }, 1000);
+    },
+
+    // Update call timer display
+    updateCallTimer() {
+        if (!this.callStartTime) return;
+
+        const durationEl = document.getElementById('call-duration');
+        if (durationEl) {
+            const now = new Date();
+            const diff = Math.floor((now - this.callStartTime) / 1000);
+            const minutes = Math.floor(diff / 60);
+            const seconds = diff % 60;
+            durationEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+    },
+
+    // Stop call timer
+    stopCallTimer() {
+        if (this.callTimerInterval) {
+            clearInterval(this.callTimerInterval);
+            this.callTimerInterval = null;
+        }
+        this.callStartTime = null;
+    },
+
+    // Toggle timer display format
+    toggleTimerDisplay() {
+        const durationEl = document.getElementById('call-duration');
+        if (durationEl) {
+            durationEl.classList.toggle('timer-seconds');
         }
     },
 
@@ -179,7 +513,7 @@ const CallManager = {
         const remoteEl = document.getElementById('remote-video');
         if (remoteEl) {
             remoteEl.srcObject = this.remoteStream;
-            remoteEl.muted = false; // Ensure remote video is not muted
+            remoteEl.muted = false;
         }
 
         // Add local tracks to connection
@@ -190,18 +524,16 @@ const CallManager = {
             });
         }
 
-        // Handle incoming tracks - FIXED VERSION
+        // Handle incoming tracks
         this.peerConnection.ontrack = (event) => {
             console.log("📹 Remote track received:", event.track.kind);
             if (event.streams && event.streams[0]) {
-                // Use the stream from the event directly
                 const remoteEl = document.getElementById('remote-video');
                 if (remoteEl) {
                     remoteEl.srcObject = event.streams[0];
                     console.log("✅ Remote stream attached to video element");
                 }
             } else if (event.track) {
-                // Fallback: add track to our remote stream
                 this.remoteStream.addTrack(event.track);
                 const remoteEl = document.getElementById('remote-video');
                 if (remoteEl) {
@@ -227,6 +559,8 @@ const CallManager = {
             if (this.peerConnection.connectionState === 'connected') {
                 console.log("✅ Call connected!");
                 this.showCallConnected();
+                this.stopRingtone();
+                this.startCallTimer();
             } else if (this.peerConnection.connectionState === 'failed') {
                 console.error("❌ Call connection failed");
                 alert("Call connection failed. Please try again.");
@@ -234,14 +568,13 @@ const CallManager = {
             }
         };
 
-        // Handle ICE connection state
         this.peerConnection.oniceconnectionstatechange = () => {
             console.log(`🧊 ICE connection state: ${this.peerConnection.iceConnectionState}`);
         };
     },
 
     // Start call as customer
-    async startCallAsCustomer() {
+    async startCallAsCustomer(videoEnabled = true, audioEnabled = true) {
         const user = firebase.auth().currentUser;
         if (!user) {
             alert('Please login to start a call');
@@ -252,22 +585,24 @@ const CallManager = {
             console.log("📞 Starting call as customer...");
             this.isCaller = true;
             
-            // Prepare media first
-            await this.prepareLocalMedia();
+            await this.prepareLocalMedia(videoEnabled, audioEnabled);
             await this.createPeerConnection();
 
-            // Create call document
             const callRef = Firestore.calls().doc();
             this.currentCallId = callRef.id;
 
             await callRef.set({
                 callerId: user.uid,
-                calleeId: "JIDFGUZI2qTo8nexGBjiOWM4sIy1", // Admin ID
+                calleeId: "JIDFGUZI2qTo8nexGBjiOWM4sIy1",
                 state: 'requested',
+                mediaState: {
+                    video: this.isVideoEnabled,
+                    audio: this.isAudioEnabled,
+                    screenShare: false
+                },
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            // Create offer with better options
             const offerOptions = {
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: true
@@ -285,14 +620,14 @@ const CallManager = {
             });
 
             console.log("✅ Call offer sent");
-
-            // Listen for answer
+            
+            this.playRingtone();
             this.listenForAnswer(callRef);
-            // Listen for ICE candidates
             this.listenForIceCandidates(callRef, 'answerCandidates');
+            this.listenForMediaStateUpdates(callRef);
 
             this.showCallUI();
-            alert('Calling admin...');
+            this.showCallOptionsModal(false); // Show call options for outgoing call
 
         } catch (error) {
             console.error('❌ Call failed:', error);
@@ -302,7 +637,7 @@ const CallManager = {
     },
 
     // Start call as admin
-    async startCallAsAdmin(userId) {
+    async startCallAsAdmin(userId, videoEnabled = true, audioEnabled = true) {
         const user = firebase.auth().currentUser;
         if (!user) {
             alert('Please login as admin');
@@ -313,7 +648,7 @@ const CallManager = {
             console.log("📞 Starting call as admin to:", userId);
             this.isCaller = true;
             
-            await this.prepareLocalMedia();
+            await this.prepareLocalMedia(videoEnabled, audioEnabled);
             await this.createPeerConnection();
 
             const callRef = Firestore.calls().doc();
@@ -323,6 +658,11 @@ const CallManager = {
                 callerId: user.uid,
                 calleeId: userId,
                 state: 'requested',
+                mediaState: {
+                    video: this.isVideoEnabled,
+                    audio: this.isAudioEnabled,
+                    screenShare: false
+                },
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
@@ -343,12 +683,14 @@ const CallManager = {
             });
 
             console.log("✅ Call offer sent to customer");
-
+            
+            this.playRingtone();
             this.listenForAnswer(callRef);
             this.listenForIceCandidates(callRef, 'answerCandidates');
+            this.listenForMediaStateUpdates(callRef);
 
             this.showCallUI();
-            alert('Calling customer...');
+            this.showCallOptionsModal(false); // Show call options for outgoing call
 
         } catch (error) {
             console.error('❌ Admin call failed:', error);
@@ -358,18 +700,19 @@ const CallManager = {
     },
 
     // Answer incoming call
-    async answerCall(callId) {
+    async answerCall(callId, videoEnabled = true, audioEnabled = true) {
         try {
             console.log("📞 Answering call:", callId);
             this.isCaller = false;
             this.currentCallId = callId;
 
+            this.stopRingtone();
+
             const callRef = Firestore.calls().doc(callId);
             
-            await this.prepareLocalMedia();
+            await this.prepareLocalMedia(videoEnabled, audioEnabled);
             await this.createPeerConnection();
 
-            // Get the offer
             const callDoc = await callRef.get();
             const callData = callDoc.data();
 
@@ -377,12 +720,10 @@ const CallManager = {
                 throw new Error('No offer found in call document');
             }
 
-            // Set remote description FIRST
             await this.peerConnection.setRemoteDescription(
                 new RTCSessionDescription(callData.offer)
             );
 
-            // Create answer with options
             const answerOptions = {
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: true
@@ -397,13 +738,18 @@ const CallManager = {
                     sdp: answer.sdp
                 },
                 state: 'accepted',
+                mediaState: {
+                    video: this.isVideoEnabled,
+                    audio: this.isAudioEnabled,
+                    screenShare: false
+                },
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
             console.log("✅ Call answered");
 
-            // Listen for ICE candidates
             this.listenForIceCandidates(callRef, 'offerCandidates');
+            this.listenForMediaStateUpdates(callRef);
 
             this.showCallUI();
 
@@ -411,6 +757,35 @@ const CallManager = {
             console.error('❌ Answer call failed:', error);
             alert('Failed to answer call: ' + error.message);
             this.cleanup();
+        }
+    },
+
+    // Show call options modal for incoming call
+    showCallOptionsModal(isIncoming = true) {
+        const optionsModal = document.getElementById('call-options-modal');
+        if (optionsModal) {
+            optionsModal.style.display = 'flex';
+            
+            const title = optionsModal.querySelector('h3');
+            if (title) {
+                title.textContent = isIncoming ? 'Answer Call With...' : 'Start Call With...';
+            }
+            
+            const videoCheckbox = document.getElementById('option-video');
+            const audioCheckbox = document.getElementById('option-audio');
+            
+            if (videoCheckbox && audioCheckbox) {
+                videoCheckbox.checked = this.isVideoEnabled;
+                audioCheckbox.checked = this.isAudioEnabled;
+            }
+        }
+    },
+
+    // Hide call options modal
+    hideCallOptionsModal() {
+        const optionsModal = document.getElementById('call-options-modal');
+        if (optionsModal) {
+            optionsModal.style.display = 'none';
         }
     },
 
@@ -426,6 +801,8 @@ const CallManager = {
                     const answer = new RTCSessionDescription(data.answer);
                     await this.peerConnection.setRemoteDescription(answer);
                     console.log("✅ Remote description set from answer");
+                    this.stopRingtone();
+                    this.hideCallOptionsModal();
                 } catch (error) {
                     console.error('❌ Error setting remote description:', error);
                 }
@@ -433,6 +810,7 @@ const CallManager = {
 
             if (data.state === 'ended') {
                 console.log("📞 Call ended by remote party");
+                this.stopRingtone();
                 this.hangupCall();
             }
         });
@@ -481,16 +859,19 @@ const CallManager = {
             }
         }
         
-        // Play remote video if it's paused
         const remoteVideo = document.getElementById('remote-video');
         if (remoteVideo && remoteVideo.paused) {
             remoteVideo.play().catch(console.error);
         }
+        
+        this.updateMediaButtons();
     },
 
     // Hang up call
     async hangupCall() {
         console.log("📞 Hanging up call...");
+        this.stopRingtone();
+        this.stopCallTimer();
         this.cleanup();
     },
 
@@ -518,6 +899,11 @@ const CallManager = {
                 this.remoteStream = null;
             }
 
+            if (this.screenStream) {
+                this.screenStream.getTracks().forEach(track => track.stop());
+                this.screenStream = null;
+            }
+
             if (this.currentCallId) {
                 Firestore.calls().doc(this.currentCallId).update({
                     state: 'ended',
@@ -526,7 +912,10 @@ const CallManager = {
                 this.currentCallId = null;
             }
 
+            this.stopRingtone();
+            this.stopCallTimer();
             this.hideCallUI();
+            this.hideCallOptionsModal();
             console.log("✅ Call cleanup completed");
 
         } catch (error) {
@@ -558,35 +947,46 @@ const CallManager = {
     handleIncomingCall(callId, callData) {
         console.log("📞 Handling incoming call:", callId);
         
-        // Store the call ID globally for the answer/decline functions
         window.currentIncomingCallId = callId;
         
         const callerName = callData.callerName || 'Customer';
-        const isAdmin = document.getElementById('admin-orders'); // Check if we're in admin panel
+        const isAdmin = document.getElementById('admin-orders');
         
         if (isAdmin) {
-            // Admin interface
-            if (confirm(`Incoming call from ${callerName}. Accept?`)) {
-                this.answerCall(callId);
-            } else {
-                this.declineCall(callId);
-            }
+            this.playRingtone();
+            this.showCallOptionsModal(true); // Show options for incoming call
         } else {
-            // Customer interface - show notification
-            const incomingCallBox = document.getElementById('incoming-call-box');
-            if (incomingCallBox) {
-                incomingCallBox.innerHTML = `
-                    <p>📞 Incoming call from CobainTech Support</p>
-                    <button onclick="answerIncomingCall()" class="btn primary">Answer</button>
+            this.playRingtone();
+            this.showIncomingCallNotification(callerName);
+        }
+    },
+
+    // Show incoming call notification with options
+    showIncomingCallNotification(callerName) {
+        const incomingCallBox = document.getElementById('incoming-call-box');
+        if (incomingCallBox) {
+            incomingCallBox.innerHTML = `
+                <p>📞 Incoming call from ${callerName}</p>
+                <div style="margin: 10px 0;">
+                    <label style="display: block; margin: 5px 0;">
+                        <input type="checkbox" id="incoming-video" checked> Video
+                    </label>
+                    <label style="display: block; margin: 5px 0;">
+                        <input type="checkbox" id="incoming-audio" checked> Audio
+                    </label>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button onclick="answerIncomingCallWithOptions()" class="btn primary">Answer</button>
                     <button onclick="declineIncomingCall()" class="btn ghost">Decline</button>
-                `;
-                incomingCallBox.style.display = 'block';
-            }
+                </div>
+            `;
+            incomingCallBox.style.display = 'block';
         }
     },
 
     // Decline call
     async declineCall(callId) {
+        this.stopRingtone();
         await Firestore.calls().doc(callId).update({
             state: 'declined',
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -602,8 +1002,8 @@ const CallManager = {
             console.log("✅ Call UI shown");
         }
         
-        // Update call buttons
         this.updateCallButtons(true);
+        this.updateMediaButtons();
     },
 
     hideCallUI() {
@@ -617,16 +1017,14 @@ const CallManager = {
         
         if (remoteVideo) {
             remoteVideo.srcObject = null;
-            remoteVideo.load(); // Reset video element
+            remoteVideo.load();
         }
         if (localVideo) {
             localVideo.srcObject = null;
-            localVideo.load(); // Reset video element
+            localVideo.load();
         }
         
-        // Update call buttons
         this.updateCallButtons(false);
-        
         console.log("✅ Call UI hidden");
     },
 
@@ -646,13 +1044,17 @@ window.addEventListener('load', () => {
     }, 1000);
 });
 
-/* ---------- Simplified Public Call Functions ---------- */
+/* ---------- Enhanced Public Call Functions ---------- */
 function startCallToAdmin() {
-    CallManager.startCallAsCustomer();
+    // Show options before starting call
+    CallManager.showCallOptionsModal(false);
 }
 
 function startCallAsAdmin(userId) {
-    CallManager.startCallAsAdmin(userId);
+    // Show options before starting call
+    CallManager.showCallOptionsModal(false);
+    // Store the user ID for later use
+    window.pendingAdminCallUserId = userId;
 }
 
 function acceptCall(callId) {
@@ -665,7 +1067,21 @@ function endCall() {
 
 function answerIncomingCall() {
     if (window.currentIncomingCallId) {
-        CallManager.answerCall(window.currentIncomingCallId);
+        CallManager.stopRingtone();
+        CallManager.answerCall(window.currentIncomingCallId, true, true); // Default with video and audio
+        const incomingCallBox = document.getElementById('incoming-call-box');
+        if (incomingCallBox) incomingCallBox.style.display = 'none';
+        window.currentIncomingCallId = null;
+    }
+}
+
+function answerIncomingCallWithOptions() {
+    if (window.currentIncomingCallId) {
+        const videoEnabled = document.getElementById('incoming-video')?.checked ?? true;
+        const audioEnabled = document.getElementById('incoming-audio')?.checked ?? true;
+        
+        CallManager.stopRingtone();
+        CallManager.answerCall(window.currentIncomingCallId, videoEnabled, audioEnabled);
         const incomingCallBox = document.getElementById('incoming-call-box');
         if (incomingCallBox) incomingCallBox.style.display = 'none';
         window.currentIncomingCallId = null;
@@ -674,6 +1090,7 @@ function answerIncomingCall() {
 
 function declineIncomingCall() {
     if (window.currentIncomingCallId) {
+        CallManager.stopRingtone();
         CallManager.declineCall(window.currentIncomingCallId);
         const incomingCallBox = document.getElementById('incoming-call-box');
         if (incomingCallBox) incomingCallBox.style.display = 'none';
@@ -681,10 +1098,49 @@ function declineIncomingCall() {
     }
 }
 
+function startCallWithOptions() {
+    const videoEnabled = document.getElementById('option-video')?.checked ?? true;
+    const audioEnabled = document.getElementById('option-audio')?.checked ?? true;
+    
+    CallManager.hideCallOptionsModal();
+    
+    if (window.pendingAdminCallUserId) {
+        // Admin calling a customer
+        CallManager.startCallAsAdmin(window.pendingAdminCallUserId, videoEnabled, audioEnabled);
+        window.pendingAdminCallUserId = null;
+    } else {
+        // Customer calling admin
+        CallManager.startCallAsCustomer(videoEnabled, audioEnabled);
+    }
+}
+
+function cancelCallWithOptions() {
+    CallManager.hideCallOptionsModal();
+    window.pendingAdminCallUserId = null;
+    CallManager.stopRingtone();
+}
+
 function listenForCallRequests() {
-    // This is now handled automatically by CallManager.init()
     console.log("📞 Call listener activated");
 }
+
+// Add these new functions for the upgraded features
+function toggleVideo() {
+    CallManager.toggleVideo();
+}
+
+function toggleAudio() {
+    CallManager.toggleAudio();
+}
+
+function toggleScreenShare() {
+    CallManager.toggleScreenShare();
+}
+
+function toggleRemoteAudio() {
+    CallManager.toggleRemoteAudio();
+}
+
 /* ---------- CUSTOMER-side chat ---------- */
 function startCustomerChat(userId, displayName = null) {
     if (customerChatUnsub) { 
@@ -773,7 +1229,7 @@ function sendChat() {
     const message = input.value.trim();
     if (!message) return;
 
-    const user = auth.currentUser;
+    const user = firebase.auth().currentUser;
     if (!user) { alert('Please login to chat.'); return; }
 
     const chatDocRef = Firestore.chats().doc(user.uid);
@@ -805,7 +1261,7 @@ function sendChat() {
 }
 
 function debounceCustomerTyping() {
-    const user = auth.currentUser;
+    const user = firebase.auth().currentUser;
     if (!user) return;
     const chatDocRef = Firestore.chats().doc(user.uid);
     chatDocRef.set({ typing: true }, { merge: true }).catch(()=>{});
@@ -1725,3 +2181,4 @@ function setFooterYear(){
     if(f) f.innerHTML=f.innerHTML.replace('{year}', new Date().getFullYear()); 
 }
 
+/* ---------- End of script.js ---------- */
