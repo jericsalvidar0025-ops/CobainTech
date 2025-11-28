@@ -56,16 +56,18 @@ window.addEventListener('load', () => {
     bindAuthState();
     initIndex();
     initAdmin();
-    initChat(); // Add this line - it was missing!
+    initChat();
     initCustomerOrders();
 });
 
-/* ---------- WebRTC Call System (Upgraded with Camera Toggle & Features) ---------- */
+/* ---------- WebRTC Call System (Fixed Version) ---------- */
 const CallManager = {
     config: { 
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' }
         ] 
     },
     localStream: null,
@@ -81,6 +83,7 @@ const CallManager = {
     callTimerInterval: null,
     isScreenSharing: false,
     screenStream: null,
+    monitoringInterval: null,
 
     // Initialize call system
     init() {
@@ -88,11 +91,17 @@ const CallManager = {
         this.setupRingtone();
         this.listenForIncomingCalls();
         this.setupCallUIListeners();
+        
+        // Check devices but don't access media automatically
+        this.checkMediaDevices().then(({ hasCamera, hasMicrophone }) => {
+            if (!hasCamera && !hasMicrophone) {
+                console.warn("⚠️ No camera or microphone detected");
+            }
+        });
     },
 
     // Setup UI event listeners
     setupCallUIListeners() {
-        // These will be attached when call UI is shown
         document.addEventListener('click', (e) => {
             if (e.target.id === 'toggle-video-btn') {
                 this.toggleVideo();
@@ -118,7 +127,6 @@ const CallManager = {
     // Create a ringtone using Web Audio API
     createRingtone() {
         try {
-            // Use a simple beep ringtone
             this.ringtoneAudio.src = "data:audio/wav;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAABAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////8AAABhTEFNRTMuMTAwBKkAAAAAAAAAADUgJAOBQQAARAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQxAADwAABpAAAAlAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
         } catch (error) {
             console.log("❌ Ringtone setup failed:", error);
@@ -188,89 +196,100 @@ const CallManager = {
         }
     },
 
-    // Media Management
-   async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
-    try {
-        console.log("🎥 Preparing local media...");
-        
-        // Check available devices first
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const hasCamera = devices.some(device => device.kind === 'videoinput');
-        const hasMicrophone = devices.some(device => device.kind === 'audioinput');
-        
-        console.log("📷 Available cameras:", hasCamera);
-        console.log("🎤 Available microphones:", hasMicrophone);
-
-        // Use simpler constraints that work across browsers
-        const constraints = {
-            audio: audioEnabled && hasMicrophone ? {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                channelCount: 1
-            } : false,
-            video: videoEnabled && hasCamera ? {
-                width: { min: 640, ideal: 1280, max: 1920 },
-                height: { min: 480, ideal: 720, max: 1080 },
-                frameRate: { ideal: 30, max: 60 },
-                facingMode: "user"
-            } : false
-        };
-
-        console.log("🎯 Media constraints:", constraints);
-
-        // If no devices available, provide better error
-        if (!constraints.audio && !constraints.video) {
-            throw new Error('No camera or microphone detected on this device');
-        }
-
-        this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        
-        // Log what we actually got
-        console.log("✅ Media stream obtained:");
-        this.localStream.getTracks().forEach(track => {
-            console.log(`  - ${track.kind}: ${track.label} (enabled: ${track.enabled})`);
-        });
-        
-        const localEl = document.getElementById('local-video');
-        if (localEl) {
-            localEl.srcObject = this.localStream;
-            localEl.muted = true;
-            localEl.playsInline = true;
+    // Check available media devices
+    async checkMediaDevices() {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const hasCamera = devices.some(device => device.kind === 'videoinput');
+            const hasMicrophone = devices.some(device => device.kind === 'audioinput');
             
-            // Add event listeners to debug video element
-            localEl.addEventListener('loadedmetadata', () => {
-                console.log("✅ Local video metadata loaded");
-            });
-            localEl.addEventListener('canplay', () => {
-                console.log("✅ Local video can play");
-            });
-            localEl.addEventListener('error', (e) => {
-                console.error("❌ Local video error:", e);
-            });
+            console.log(`📷 Camera available: ${hasCamera}`);
+            console.log(`🎤 Microphone available: ${hasMicrophone}`);
+            
+            return { hasCamera, hasMicrophone };
+        } catch (error) {
+            console.error('❌ Device enumeration failed:', error);
+            return { hasCamera: false, hasMicrophone: false };
         }
+    },
 
-        this.isVideoEnabled = videoEnabled && hasCamera;
-        this.isAudioEnabled = audioEnabled && hasMicrophone;
+    // Media Management
+    async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
+        try {
+            console.log("🎥 Preparing local media...");
+            
+            const { hasCamera, hasMicrophone } = await this.checkMediaDevices();
+            
+            // Use simpler constraints that work across browsers
+            const constraints = {
+                audio: audioEnabled && hasMicrophone ? {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1
+                } : false,
+                video: videoEnabled && hasCamera ? {
+                    width: { min: 640, ideal: 1280, max: 1920 },
+                    height: { min: 480, ideal: 720, max: 1080 },
+                    frameRate: { ideal: 30, max: 60 },
+                    facingMode: "user"
+                } : false
+            };
 
-    } catch (err) {
-        console.error('❌ Media access failed:', err);
-        
-        let errorMessage = 'Unable to access camera/microphone. ';
-        if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') {
-            errorMessage += 'No camera or microphone was found or constraints could not be met.';
-        } else if (err.name === 'NotAllowedError') {
-            errorMessage += 'Please allow camera and microphone permissions in your browser.';
-        } else if (err.name === 'NotReadableError') {
-            errorMessage += 'Camera/microphone is already in use by another application.';
-        } else {
-            errorMessage += 'Please check your device permissions and connections.';
+            console.log("🎯 Media constraints:", constraints);
+
+            // If no devices available, provide better error
+            if (!constraints.audio && !constraints.video) {
+                throw new Error('No camera or microphone detected on this device');
+            }
+
+            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            // Log what we actually got
+            console.log("✅ Media stream obtained:");
+            this.localStream.getTracks().forEach(track => {
+                console.log(`  - ${track.kind}: ${track.label} (enabled: ${track.enabled})`);
+            });
+            
+            const localEl = document.getElementById('local-video');
+            if (localEl) {
+                localEl.srcObject = this.localStream;
+                localEl.muted = true;
+                localEl.playsInline = true;
+                
+                // Add event listeners to debug video element
+                localEl.addEventListener('loadedmetadata', () => {
+                    console.log("✅ Local video metadata loaded");
+                });
+                localEl.addEventListener('canplay', () => {
+                    console.log("✅ Local video can play");
+                });
+                localEl.addEventListener('error', (e) => {
+                    console.error("❌ Local video error:", e);
+                });
+            }
+
+            this.isVideoEnabled = videoEnabled && hasCamera;
+            this.isAudioEnabled = audioEnabled && hasMicrophone;
+
+        } catch (err) {
+            console.error('❌ Media access failed:', err);
+            
+            let errorMessage = 'Unable to access camera/microphone. ';
+            if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') {
+                errorMessage += 'No camera or microphone was found or constraints could not be met.';
+            } else if (err.name === 'NotAllowedError') {
+                errorMessage += 'Please allow camera and microphone permissions in your browser.';
+            } else if (err.name === 'NotReadableError') {
+                errorMessage += 'Camera/microphone is already in use by another application.';
+            } else {
+                errorMessage += 'Please check your device permissions and connections.';
+            }
+            
+            alert(errorMessage);
+            throw err;
         }
-        
-        alert(errorMessage);
-        throw err;
-    }
-},
+    },
 
     // Toggle video on/off
     async toggleVideo() {
@@ -282,11 +301,9 @@ const CallManager = {
                 this.isVideoEnabled = !this.isVideoEnabled;
                 videoTrack.enabled = this.isVideoEnabled;
                 
-                // Update UI
                 this.updateMediaButtons();
                 console.log(`📹 Video ${this.isVideoEnabled ? 'enabled' : 'disabled'}`);
                 
-                // Send state update to peer
                 this.sendMediaStateUpdate();
             }
         } catch (error) {
@@ -304,11 +321,9 @@ const CallManager = {
                 this.isAudioEnabled = !this.isAudioEnabled;
                 audioTrack.enabled = this.isAudioEnabled;
                 
-                // Update UI
                 this.updateMediaButtons();
                 console.log(`🎤 Audio ${this.isAudioEnabled ? 'enabled' : 'disabled'}`);
                 
-                // Send state update to peer
                 this.sendMediaStateUpdate();
             }
         } catch (error) {
@@ -320,7 +335,6 @@ const CallManager = {
     async toggleScreenShare() {
         try {
             if (!this.isScreenSharing) {
-                // Start screen share
                 this.screenStream = await navigator.mediaDevices.getDisplayMedia({
                     video: true,
                     audio: true
@@ -328,7 +342,6 @@ const CallManager = {
 
                 const videoTrack = this.screenStream.getVideoTracks()[0];
                 
-                // Replace the video track in the peer connection
                 const sender = this.peerConnection.getSenders().find(s => 
                     s.track && s.track.kind === 'video'
                 );
@@ -337,14 +350,12 @@ const CallManager = {
                     await sender.replaceTrack(videoTrack);
                     this.isScreenSharing = true;
                     
-                    // Stop screen share when user stops it from browser UI
                     videoTrack.onended = () => {
                         this.toggleScreenShare();
                     };
                 }
 
             } else {
-                // Stop screen share and revert to camera
                 const videoTrack = this.localStream.getVideoTracks()[0];
                 const sender = this.peerConnection.getSenders().find(s => 
                     s.track && s.track.kind === 'video'
@@ -419,7 +430,6 @@ const CallManager = {
             remoteStateEl.textContent = stateText || 'Connected';
         }
 
-        // Show/hide remote video placeholder based on video state
         const remoteVideoPlaceholder = document.getElementById('remote-video-placeholder');
         if (remoteVideoPlaceholder) {
             remoteVideoPlaceholder.style.display = mediaState.video ? 'none' : 'flex';
@@ -497,7 +507,20 @@ const CallManager = {
     // Create peer connection
     async createPeerConnection() {
         console.log("🔗 Creating peer connection...");
-        this.peerConnection = new RTCPeerConnection(this.config);
+        
+        const config = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' }
+            ],
+            iceTransportPolicy: 'all',
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require'
+        };
+        
+        this.peerConnection = new RTCPeerConnection(config);
         
         // Create remote stream
         this.remoteStream = new MediaStream();
@@ -517,121 +540,164 @@ const CallManager = {
 
         // Handle incoming tracks
         this.peerConnection.ontrack = (event) => {
-            console.log("📹 Remote track received:", event.track.kind);
+            console.log("📹 Remote track received:", event.track.kind, event.track.id);
+            console.log("📹 Streams received:", event.streams.length);
+            
             if (event.streams && event.streams[0]) {
                 const remoteEl = document.getElementById('remote-video');
                 if (remoteEl) {
                     remoteEl.srcObject = event.streams[0];
                     console.log("✅ Remote stream attached to video element");
+                    
+                    remoteEl.play().catch(e => console.error("❌ Remote video play failed:", e));
                 }
-            } else if (event.track) {
+            }
+            
+            if (event.track) {
                 this.remoteStream.addTrack(event.track);
-                const remoteEl = document.getElementById('remote-video');
-                if (remoteEl) {
-                    remoteEl.srcObject = this.remoteStream;
-                    console.log("✅ Remote track added to stream");
-                }
+                console.log(`✅ Added ${event.track.kind} track to remote stream`);
             }
         };
 
         // Handle ICE candidates
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
-                console.log("❄️ ICE candidate generated");
+                console.log("❄️ ICE candidate generated:", event.candidate.type);
                 this.sendIceCandidate(event.candidate);
             } else {
                 console.log("✅ All ICE candidates gathered");
             }
         };
 
-       // Handle connection state
-this.peerConnection.onconnectionstatechange = () => {
-    const state = this.peerConnection.connectionState;
-    console.log(`🔌 Connection state: ${state}`);
-    
-    // Update UI
-    const connectionStateEl = document.getElementById('connection-state');
-    if (connectionStateEl) connectionStateEl.textContent = state;
-    
-    if (state === 'connected') {
-        console.log("✅ Call connected!");
-        this.showCallConnected();
-        this.stopRingtone();
-        this.startCallTimer();
-        
-        const statusEl = document.getElementById('call-status');
-        if (statusEl) statusEl.textContent = 'Connected';
-        if (statusEl) statusEl.style.color = '#2ecc71';
-    } else if (state === 'failed') {
-        console.error("❌ Call connection failed");
-        const statusEl = document.getElementById('call-status');
-        if (statusEl) statusEl.textContent = 'Connection Failed';
-        if (statusEl) statusEl.style.color = '#e74c3c';
-        alert("Call connection failed. Please try again.");
-        this.hangupCall();
-    }
-};
-
-this.peerConnection.oniceconnectionstatechange = () => {
-    const state = this.peerConnection.iceConnectionState;
-    console.log(`🧊 ICE connection state: ${state}`);
-    
-    const iceStateEl = document.getElementById('ice-state');
-    if (iceStateEl) iceStateEl.textContent = state;
-};
-
-this.peerConnection.onsignalingstatechange = () => {
-    const state = this.peerConnection.signalingState;
-    console.log(`📡 Signaling state: ${state}`);
-    
-    const signalingStateEl = document.getElementById('signaling-state');
-    if (signalingStateEl) signalingStateEl.textContent = state;
-};
-
-// Track remote stream
-this.peerConnection.ontrack = (event) => {
-    console.log("📹 Remote track received:", event.track.kind, event.track.id);
-    
-    if (event.streams && event.streams[0]) {
-        const remoteEl = document.getElementById('remote-video');
-        if (remoteEl) {
-            remoteEl.srcObject = event.streams[0];
-            console.log("✅ Remote stream attached to video element");
-            
-            // Add event listeners to debug remote video
-            remoteEl.addEventListener('loadedmetadata', () => {
-                console.log("✅ Remote video metadata loaded");
-                document.getElementById('remote-status').style.color = '#2ecc71';
-            });
-            remoteEl.addEventListener('canplay', () => {
-                console.log("✅ Remote video can play");
-            });
-            remoteEl.addEventListener('error', (e) => {
-                console.error("❌ Remote video error:", e);
-                document.getElementById('remote-status').style.color = '#e74c3c';
-            });
-        }
-    }
-};
-
         // Handle connection state
         this.peerConnection.onconnectionstatechange = () => {
-            console.log(`🔌 Connection state: ${this.peerConnection.connectionState}`);
-            if (this.peerConnection.connectionState === 'connected') {
+            const state = this.peerConnection.connectionState;
+            console.log(`🔌 Connection state: ${state}`);
+            
+            const connectionStateEl = document.getElementById('connection-state');
+            if (connectionStateEl) connectionStateEl.textContent = state;
+            
+            if (state === 'connected') {
                 console.log("✅ Call connected!");
                 this.showCallConnected();
                 this.stopRingtone();
                 this.startCallTimer();
-            } else if (this.peerConnection.connectionState === 'failed') {
+                this.startConnectionMonitoring();
+                
+                const statusEl = document.getElementById('call-status');
+                if (statusEl) {
+                    statusEl.textContent = 'Connected';
+                    statusEl.style.color = '#2ecc71';
+                }
+            } else if (state === 'failed') {
                 console.error("❌ Call connection failed");
+                const statusEl = document.getElementById('call-status');
+                if (statusEl) {
+                    statusEl.textContent = 'Connection Failed';
+                    statusEl.style.color = '#e74c3c';
+                }
                 alert("Call connection failed. Please try again.");
                 this.hangupCall();
             }
         };
 
         this.peerConnection.oniceconnectionstatechange = () => {
-            console.log(`🧊 ICE connection state: ${this.peerConnection.iceConnectionState}`);
+            const state = this.peerConnection.iceConnectionState;
+            console.log(`🧊 ICE connection state: ${state}`);
+            
+            const iceStateEl = document.getElementById('ice-state');
+            if (iceStateEl) iceStateEl.textContent = state;
+            
+            if (state === 'failed') {
+                console.log("🔄 ICE failed, restarting...");
+                this.restartIce();
+            }
         };
+
+        this.peerConnection.onsignalingstatechange = () => {
+            const state = this.peerConnection.signalingState;
+            console.log(`📡 Signaling state: ${state}`);
+            
+            const signalingStateEl = document.getElementById('signaling-state');
+            if (signalingStateEl) signalingStateEl.textContent = state;
+        };
+    },
+
+    // ICE restart for failed connections
+    async restartIce() {
+        if (!this.peerConnection || this.peerConnection.signalingState === 'closed') return;
+        
+        try {
+            console.log("🔄 Restarting ICE...");
+            const offer = await this.peerConnection.createOffer({ iceRestart: true });
+            await this.peerConnection.setLocalDescription(offer);
+            
+            if (this.currentCallId) {
+                await Firestore.calls().doc(this.currentCallId).update({
+                    offer: {
+                        type: offer.type,
+                        sdp: offer.sdp
+                    },
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        } catch (error) {
+            console.error("❌ ICE restart failed:", error);
+        }
+    },
+
+    // Connection monitoring
+    startConnectionMonitoring() {
+        this.stopConnectionMonitoring();
+        this.monitoringInterval = setInterval(() => {
+            if (this.peerConnection && this.peerConnection.connectionState === 'connected') {
+                this.logConnectionStats();
+            }
+        }, 10000);
+    },
+
+    stopConnectionMonitoring() {
+        if (this.monitoringInterval) {
+            clearInterval(this.monitoringInterval);
+            this.monitoringInterval = null;
+        }
+    },
+
+    logConnectionStats() {
+        if (!this.peerConnection) {
+            console.log("📊 No active peer connection");
+            return;
+        }
+        
+        console.log("📊 Connection Statistics:");
+        console.log("- Connection state:", this.peerConnection.connectionState);
+        console.log("- ICE connection state:", this.peerConnection.iceConnectionState);
+        console.log("- ICE gathering state:", this.peerConnection.iceGatheringState);
+        console.log("- Signaling state:", this.peerConnection.signalingState);
+        
+        const senders = this.peerConnection.getSenders();
+        console.log(`- Active senders: ${senders.length}`);
+        senders.forEach((sender, index) => {
+            if (sender.track) {
+                console.log(`  Sender ${index} (${sender.track.kind}):`, {
+                    enabled: sender.track.enabled,
+                    readyState: sender.track.readyState,
+                    muted: sender.track.muted
+                });
+            }
+        });
+        
+        const receivers = this.peerConnection.getReceivers();
+        console.log(`- Active receivers: ${receivers.length}`);
+        receivers.forEach((receiver, index) => {
+            if (receiver.track) {
+                console.log(`  Receiver ${index} (${receiver.track.kind}):`, {
+                    enabled: receiver.track.enabled,
+                    readyState: receiver.track.readyState,
+                    muted: receiver.track.muted
+                });
+            }
+        });
     },
 
     // Start call as customer
@@ -666,7 +732,9 @@ this.peerConnection.ontrack = (event) => {
 
             const offerOptions = {
                 offerToReceiveAudio: true,
-                offerToReceiveVideo: true
+                offerToReceiveVideo: true,
+                voiceActivityDetection: false,
+                iceRestart: false
             };
             
             const offer = await this.peerConnection.createOffer(offerOptions);
@@ -688,7 +756,7 @@ this.peerConnection.ontrack = (event) => {
             this.listenForMediaStateUpdates(callRef);
 
             this.showCallUI();
-            this.showCallOptionsModal(false); // Show call options for outgoing call
+            this.showCallOptionsModal(false);
 
         } catch (error) {
             console.error('❌ Call failed:', error);
@@ -729,7 +797,9 @@ this.peerConnection.ontrack = (event) => {
 
             const offerOptions = {
                 offerToReceiveAudio: true,
-                offerToReceiveVideo: true
+                offerToReceiveVideo: true,
+                voiceActivityDetection: false,
+                iceRestart: false
             };
             
             const offer = await this.peerConnection.createOffer(offerOptions);
@@ -751,7 +821,7 @@ this.peerConnection.ontrack = (event) => {
             this.listenForMediaStateUpdates(callRef);
 
             this.showCallUI();
-            this.showCallOptionsModal(false); // Show call options for outgoing call
+            this.showCallOptionsModal(false);
 
         } catch (error) {
             console.error('❌ Admin call failed:', error);
@@ -787,7 +857,8 @@ this.peerConnection.ontrack = (event) => {
 
             const answerOptions = {
                 offerToReceiveAudio: true,
-                offerToReceiveVideo: true
+                offerToReceiveVideo: true,
+                voiceActivityDetection: false
             };
             
             const answer = await this.peerConnection.createAnswer(answerOptions);
@@ -842,94 +913,6 @@ this.peerConnection.ontrack = (event) => {
         }
     },
 
-   // Add this method to CallManager
-async checkMediaDevices() {
-    try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const hasCamera = devices.some(device => device.kind === 'videoinput');
-        const hasMicrophone = devices.some(device => device.kind === 'audioinput');
-        
-        console.log(`📷 Camera available: ${hasCamera}`);
-        console.log(`🎤 Microphone available: ${hasMicrophone}`);
-        
-        return { hasCamera, hasMicrophone };
-    } catch (error) {
-        console.error('❌ Device enumeration failed:', error);
-        return { hasCamera: false, hasMicrophone: false };
-    }
-},
-
-// Update the init method to not automatically access media
-init() {
-    console.log("📞 CallManager initialized");
-    this.setupRingtone();
-    this.listenForIncomingCalls();
-    this.setupCallUIListeners();
-    
-    // Don't automatically prepare media - wait for user action
-    this.checkMediaDevices().then(({ hasCamera, hasMicrophone }) => {
-        if (!hasCamera && !hasMicrophone) {
-            console.warn("⚠️ No camera or microphone detected");
-        }
-    });
-},
-
-// Update prepareLocalMedia to handle missing devices gracefully
-async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
-    try {
-        console.log("🎥 Preparing local media...");
-        
-        const { hasCamera, hasMicrophone } = await this.checkMediaDevices();
-        
-        // Adjust constraints based on available devices
-        const constraints = {
-            audio: audioEnabled && hasMicrophone ? {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            } : false,
-            video: videoEnabled && hasCamera ? {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                frameRate: { ideal: 30 }
-            } : false
-        };
-
-        // If no devices are available, show appropriate message
-        if (!constraints.audio && !constraints.video) {
-            throw new Error('No camera or microphone available on this device');
-        }
-
-        this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        
-        const localEl = document.getElementById('local-video');
-        if (localEl) {
-            localEl.srcObject = this.localStream;
-            localEl.muted = true;
-            console.log("✅ Local media ready");
-        }
-
-        this.isVideoEnabled = videoEnabled && hasCamera;
-        this.isAudioEnabled = audioEnabled && hasMicrophone;
-
-    } catch (err) {
-        console.error('❌ Media access failed:', err);
-        
-        // Show user-friendly error message
-        let errorMessage = 'Unable to access camera/microphone. ';
-        if (err.name === 'NotFoundError') {
-            errorMessage += 'No camera or microphone was found on this device.';
-        } else if (err.name === 'NotAllowedError') {
-            errorMessage += 'Please allow camera and microphone permissions.';
-        } else {
-            errorMessage += 'Please check your device permissions and connections.';
-        }
-        
-        alert(errorMessage);
-        throw err;
-    }
-},
-
     // Hide call options modal
     hideCallOptionsModal() {
         const optionsModal = document.getElementById('call-options-modal');
@@ -938,34 +921,34 @@ async prepareLocalMedia(videoEnabled = true, audioEnabled = true) {
         }
     },
 
-// Listen for answer
-listenForAnswer(callRef) {
-    callRef.onSnapshot(async (snapshot) => {
-        const data = snapshot.data();
-        if (!data) return;
+    // Listen for answer
+    listenForAnswer(callRef) {
+        callRef.onSnapshot(async (snapshot) => {
+            const data = snapshot.data();
+            if (!data) return;
 
-        // CRITICAL: Check if peerConnection exists before using it
-        if (data.answer && this.peerConnection && !this.peerConnection.currentRemoteDescription) {
-            console.log("✅ Answer received");
-            try {
-                const answer = new RTCSessionDescription(data.answer);
-                await this.peerConnection.setRemoteDescription(answer);
-                console.log("✅ Remote description set from answer");
-                this.stopRingtone();
-                this.hideCallOptionsModal();
-            } catch (error) {
-                console.error('❌ Error setting remote description:', error);
+            // CRITICAL: Check if peerConnection exists before using it
+            if (data.answer && this.peerConnection && !this.peerConnection.currentRemoteDescription) {
+                console.log("✅ Answer received");
+                try {
+                    const answer = new RTCSessionDescription(data.answer);
+                    await this.peerConnection.setRemoteDescription(answer);
+                    console.log("✅ Remote description set from answer");
+                    this.stopRingtone();
+                    this.hideCallOptionsModal();
+                } catch (error) {
+                    console.error('❌ Error setting remote description:', error);
+                }
             }
-        }
 
-        // Also check if peerConnection exists here
-        if (data.state === 'ended' && this.peerConnection) {
-            console.log("📞 Call ended by remote party");
-            this.stopRingtone();
-            this.hangupCall();
-        }
-    });
-},
+            if (data.state === 'ended' && this.peerConnection) {
+                console.log("📞 Call ended by remote party");
+                this.stopRingtone();
+                this.hangupCall();
+            }
+        });
+    },
+
     // Listen for ICE candidates
     listenForIceCandidates(callRef, candidateType) {
         callRef.collection(candidateType).onSnapshot((snapshot) => {
@@ -985,7 +968,7 @@ listenForAnswer(callRef) {
 
     // Send ICE candidate
     async sendIceCandidate(candidate) {
-        if (!this.currentCallId) return;
+        if (!this.currentCallId || !this.peerConnection) return;
 
         try {
             const callRef = Firestore.calls().doc(this.currentCallId);
@@ -1025,10 +1008,11 @@ listenForAnswer(callRef) {
         this.cleanup();
     },
 
-
     // Cleanup resources
     cleanup() {
         try {
+            this.stopConnectionMonitoring();
+            
             if (this.peerConnection) {
                 this.peerConnection.close();
                 this.peerConnection = null;
@@ -1105,7 +1089,7 @@ listenForAnswer(callRef) {
         
         if (isAdmin) {
             this.playRingtone();
-            this.showCallOptionsModal(true); // Show options for incoming call
+            this.showCallOptionsModal(true);
         } else {
             this.playRingtone();
             this.showIncomingCallNotification(callerName);
@@ -1198,56 +1182,22 @@ window.addEventListener('load', () => {
 /* ---------- Enhanced Public Call Functions ---------- */
 async function startCallToAdmin() {
     try {
-        // Test permissions and device availability first
         const hasPermissions = await testMediaPermissions();
         if (!hasPermissions) return;
         
-        // Show options before starting call
         CallManager.showCallOptionsModal(false);
     } catch (error) {
         console.error('Call setup failed:', error);
     }
 }
-// Add this test function
-async function testWebRTCSetup() {
-    console.log("🧪 Testing WebRTC setup...");
-    
-    try {
-        // Test media devices
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        console.log("📱 Available devices:", devices);
-        
-        // Test getUserMedia
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: true, 
-            video: true 
-        });
-        console.log("✅ getUserMedia works");
-        stream.getTracks().forEach(track => track.stop());
-        
-        // Test RTCPeerConnection
-        const pc = new RTCPeerConnection();
-        console.log("✅ RTCPeerConnection works");
-        pc.close();
-        
-        console.log("🎉 WebRTC setup looks good!");
-        return true;
-    } catch (error) {
-        console.error("❌ WebRTC test failed:", error);
-        alert(`WebRTC test failed: ${error.message}`);
-        return false;
-    }
-}
 
-// Call this in your admin initialization
-// testWebRTCSetup();
 async function testMediaPermissions() {
     try {
         const { hasCamera, hasMicrophone } = await CallManager.checkMediaDevices();
         
         if (!hasCamera && !hasMicrophone) {
             alert('No camera or microphone detected on this device. Calls will be audio-only.');
-            return true; // Allow continuing with audio constraints
+            return true;
         }
         
         const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -1255,7 +1205,6 @@ async function testMediaPermissions() {
             video: hasCamera 
         });
         
-        // Stop the test stream immediately
         stream.getTracks().forEach(track => track.stop());
         console.log("✅ Media permissions granted");
         return true;
@@ -1264,7 +1213,7 @@ async function testMediaPermissions() {
         
         if (error.name === 'NotFoundError') {
             alert("No camera or microphone found. You can still use audio-only calls if a microphone is available.");
-            return true; // Allow continuing with adjusted constraints
+            return true;
         } else {
             alert("Please allow camera and microphone access for calls to work properly.");
             return false;
@@ -1273,9 +1222,7 @@ async function testMediaPermissions() {
 }
 
 function startCallAsAdmin(userId) {
-    // Show options before starting call
     CallManager.showCallOptionsModal(false);
-    // Store the user ID for later use
     window.pendingAdminCallUserId = userId;
 }
 
@@ -1290,21 +1237,19 @@ function endCall() {
 function answerIncomingCall() {
     if (window.currentIncomingCallId) {
         CallManager.stopRingtone();
-        CallManager.answerCall(window.currentIncomingCallId, true, true); // Default with video and audio
+        CallManager.answerCall(window.currentIncomingCallId, true, true);
         const incomingCallBox = document.getElementById('incoming-call-box');
         if (incomingCallBox) incomingCallBox.style.display = 'none';
         window.currentIncomingCallId = null;
     }
 }
 
-// Update your call functions to check permissions first
 async function startCallToSelectedUser() {
     if (!currentAdminChatUser) {
         alert('Please select a customer to call first.');
         return;
     }
     
-    // Test permissions first
     const hasPermissions = await testMediaPermissions();
     if (hasPermissions) {
         startCallAsAdmin(currentAdminChatUser);
@@ -1341,11 +1286,9 @@ function startCallWithOptions() {
     CallManager.hideCallOptionsModal();
     
     if (window.pendingAdminCallUserId) {
-        // Admin calling a customer
         CallManager.startCallAsAdmin(window.pendingAdminCallUserId, videoEnabled, audioEnabled);
         window.pendingAdminCallUserId = null;
     } else {
-        // Customer calling admin
         CallManager.startCallAsCustomer(videoEnabled, audioEnabled);
     }
 }
@@ -1389,7 +1332,6 @@ let chatUsersCache = {};
 /* ---------- Chat System Initialization ---------- */
 function initChat(){
     auth.onAuthStateChanged(user => {
-        // Store (customer) view
         if (DOM.q('#chat-messages')) {
             if (user) startCustomerChat(user.uid, user.displayName || null);
             else {
@@ -1398,21 +1340,16 @@ function initChat(){
             }
         }
 
-        // Admin view
         if (DOM.q('#chat-users')) {
             loadChatUsersRealtime();
-            // request permission for browser notifications
             if ("Notification" in window && Notification.permission !== 'granted') {
                 Notification.requestPermission().catch(()=>{});
             }
-            // start watcher for new messages (for notifications and global badge)
             startGlobalNotificationWatcher();
-            // listen for incoming call requests (if admin)
             listenForCallRequests();
         }
     });
 
-    // Wire chat input (customer store)
     const chatInputEl = DOM.q('#chat-input');
     if (chatInputEl) {
         chatInputEl.addEventListener('keydown', e => {
@@ -1424,7 +1361,6 @@ function initChat(){
         chatInputEl.addEventListener('input', debounceCustomerTyping);
     }
 
-    // Wire admin send Enter
     const adminInput = DOM.q('#admin-chat-input');
     if (adminInput) adminInput.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -1444,7 +1380,6 @@ function startCustomerChat(userId, displayName = null) {
     const messagesBox = DOM.q('#chat-messages');
     if (!messagesBox) return;
 
-    // Ensure parent chat doc exists
     Firestore.chats().doc(userId).set({
         userId,
         name: displayName || '',
@@ -1465,7 +1400,6 @@ function startCustomerChat(userId, displayName = null) {
             appendCustomerMessageToUI(messagesBox, m);
         });
 
-        // mark admin messages as read by customer
         markMessagesReadForCustomer(userId).catch(()=>{});
         messagesBox.scrollTo({ top: messagesBox.scrollHeight, behavior: 'smooth' });
     }, err => {
@@ -1544,7 +1478,6 @@ function sendChat() {
     }))
     .then(() => {
         input.value = '';
-        // collapse typing
         chatDocRef.set({ typing: false }, { merge: true }).catch(()=>{});
     })
     .catch(err => {
@@ -1578,7 +1511,6 @@ async function renderAdminUserList(snapshot){
     const docs = [];
     snapshot.forEach(d => docs.push({ id: d.id, ...d.data() }));
 
-    // parallel fetch unread counts & last message per chat
     const unreadPromises = docs.map(d => Firestore.chats().doc(d.id).collection('messages')
                                       .where('sender','==','customer').where('readByAdmin','==',false).get()
                                       .then(s => ({ id: d.id, unread: s.size })).catch(()=>({id:d.id, unread:0})));
@@ -1620,11 +1552,9 @@ async function renderAdminUserList(snapshot){
 
     listEl.innerHTML = html;
 
-    // update global unread badge
     const totalUnread = Object.values(unreadMap).reduce((s,n)=>s+n,0);
     updateGlobalNotifBadge(totalUnread);
 
-    // wire row click to open chat (excluding clicking the buttons)
     listEl.querySelectorAll('[data-uid]').forEach(el => {
         el.addEventListener('click', (ev) => {
             if (ev.target.tagName.toLowerCase() === 'button') return;
@@ -1650,7 +1580,6 @@ function loadChatUsersRealtime(){
         listEl.innerHTML = '<div style="padding:12px;color:#f66">Failed to load users.</div>';
     });
 
-    // optional: search input handling
     const search = DOM.q('#chat-search');
     if (search) search.addEventListener('input', Utils.debounce(()=> {
         const qv = search.value.trim().toLowerCase();
@@ -1668,7 +1597,6 @@ async function openAdminChat(userId){
     const messagesBox = DOM.q('#chat-admin-messages');
     if (!messagesBox) return;
 
-    // update chat header
     const withEl = DOM.q('#chat-with');
     if (withEl) {
         try {
@@ -1678,11 +1606,8 @@ async function openAdminChat(userId){
         } catch (err) { console.error(err); }
     }
 
-    // mark unread messages as read by admin
     await markMessagesReadForAdmin(userId);
-    // attach listener for messages
     attachAdminMessagesListener(userId);
-    // ensure chat-admin-box is visible
     const boxWrap = DOM.q('#chat-admin-box');
     if (boxWrap) boxWrap.style.display = 'block';
 }
@@ -1770,7 +1695,6 @@ async function markMessagesReadForAdmin(userId){
             .where('sender','==','customer').where('readByAdmin','==',false);
         const snap = await q.get();
         if (snap.empty) {
-            // ensure parent flag is false
             await Firestore.chats().doc(userId).set({ unreadForAdmin: false }, { merge: true });
             return;
         }
@@ -1793,7 +1717,6 @@ function closeChat(){
     if (boxWrap) boxWrap.style.display = 'none';
     const cam = DOM.q('#chat-admin-messages'); 
     if (cam) cam.innerHTML = '';
-    // refresh users list
     Firestore.chats().get().then(snap => renderAdminUserList(snap)).catch(()=>{});
 }
 
@@ -1812,16 +1735,14 @@ function updateGlobalNotifBadge(count){
 /* ---------- Notifications & watchers ---------- */
 function startGlobalNotificationWatcher(){
     try {
-        // listen to recent messages across chats for notifications
         db.collectionGroup('messages').orderBy('timestamp','desc').limit(50).onSnapshot(snap => {
             snap.docChanges().forEach(change => {
                 if (change.type !== 'added') return;
                 const m = change.doc.data();
                 if (!m || m.sender !== 'customer') return;
-                const pathParts = change.doc.ref.path.split('/'); // ['chats','{uid}','messages','{msgId}']
+                const pathParts = change.doc.ref.path.split('/');
                 const uid = pathParts[1];
                 notifyAdminOfIncomingMessage(uid, m.name || 'Customer', m.message);
-                // bump badge quickly
                 const badge = DOM.q('#chat-notif');
                 if (badge) {
                     const curr = badge.style.display === 'inline-block' ? (Number(badge.textContent.replace('+','')) || 0) : 0;
@@ -1832,7 +1753,6 @@ function startGlobalNotificationWatcher(){
             console.warn('global watcher err', err);
         });
     } catch (e) {
-        // collectionGroup may be blocked by rules or plan; ignore gracefully
         console.warn('collectionGroup watcher not supported or failed', e);
     }
 }
@@ -2475,14 +2395,3 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
-
-
-
-
-
-
-
-
-
-
-
