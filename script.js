@@ -56,7 +56,6 @@ window.addEventListener('load', () => {
     bindAuthState();
     initIndex();
     initAdmin();
-    initChat();
     initCustomerOrders();
 });
 
@@ -2126,5 +2125,6 @@ function setFooterYear(){
 }
 
 /* ---------- End of script.js ---------- */
+
 
 
